@@ -6,6 +6,9 @@ computadora, sin internet.
 
 > **Estado: en desarrollo.** Esta es una versión de avance. Abajo está lo que ya anda y lo que falta.
 
+**Probala online: [house-mates-plano.vercel.app](https://house-mates-plano.vercel.app)**. Es una versión de muestra:
+se puede recorrer y probar todo, pero los cambios no se guardan (la herramienta completa se usa en la compu).
+
 ## Qué ya hace
 
 - **Lugar a escala:** ambientes con paredes, puertas y ventanas, o predios al aire libre.
