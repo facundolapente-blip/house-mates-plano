@@ -93,6 +93,9 @@ const estado = {
   sol: { dia: null, minuto: 17 * 60, real: false },
 };
 let listaEscenas = [];
+// Versión de muestra: la app publicada en internet, sin el servidor de la compu. Las escenas se leen de
+// archivos fijos (escenas/indice.json) y se puede mirar y probar todo, pero los cambios no se guardan.
+let muestra = false;
 
 function guardarPref() {
   try {
@@ -1628,6 +1631,11 @@ async function guardar({ respaldar = false } = {}) {
     ponerGuardado('ok');
     return true;
   }
+  if (muestra) {
+    estado.textoGuardado = texto;
+    ponerGuardado('muestra', 'En la versión de muestra los cambios no se guardan. Al recargar la página vuelve a como estaba.');
+    return true;
+  }
   ponerGuardado('guardando');
   try {
     const r = await fetch(`/api/escenas/${estado.slug}${respaldar ? '?respaldar' : ''}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: texto });
@@ -1651,7 +1659,7 @@ async function guardarPendiente() {
 function ponerGuardado(clave, detalle = '') {
   const el = $('#guardado');
   el.dataset.estado = clave;
-  el.textContent = { pendiente: 'Sin guardar', guardando: 'Guardando…', ok: 'Guardado', error: 'No se pudo guardar' }[clave];
+  el.textContent = { pendiente: muestra ? 'Muestra: no se guarda' : 'Sin guardar', guardando: 'Guardando…', ok: muestra ? 'Muestra: no se guarda' : 'Guardado', error: 'No se pudo guardar', muestra: 'Muestra: no se guarda' }[clave];
   el.title = detalle;
 }
 
@@ -3135,8 +3143,23 @@ function renderMateriales() {
 /* ================================================================== escenas */
 
 async function cargarLista() {
-  const r = await fetch('/api/escenas', { cache: 'no-store' });
-  listaEscenas = await r.json();
+  let lista = null;
+  if (!muestra) {
+    try {
+      const r = await fetch('/api/escenas', { cache: 'no-store' });
+      if (r.ok) lista = await r.json();
+    } catch {}
+  }
+  if (!Array.isArray(lista)) {
+    const r = await fetch('escenas/indice.json', { cache: 'no-store' }).catch(() => null);
+    if (!r?.ok) throw new Error('No hay servidor');
+    lista = await r.json();
+    if (!muestra) {
+      muestra = true;
+      document.documentElement.classList.add('muestra');
+    }
+  }
+  listaEscenas = lista;
   const sel = $('#sel-escena');
   sel.innerHTML = listaEscenas.map((x) => `<option value="${esc(x.slug)}">${esc(x.nombre)}</option>`).join('');
   if (estado.slug) sel.value = estado.slug;
@@ -3152,7 +3175,7 @@ async function abrirEscena(slug) {
     if (estado.slug) $('#sel-escena').value = estado.slug;
     aviso(texto, 'error', 9000);
   };
-  const r = await fetch(`/api/escenas/${encodeURIComponent(slug)}`, { cache: 'no-store' }).catch(() => null);
+  const r = await fetch(muestra ? `escenas/${encodeURIComponent(slug)}.json` : `/api/escenas/${encodeURIComponent(slug)}`, { cache: 'no-store' }).catch(() => null);
   if (!r?.ok) return fallo(`No se pudo abrir la escena ${slug}.`);
   const texto = await r.text();
   let datos;
@@ -3618,6 +3641,9 @@ async function construirCAD() {
 
 async function importarDXF(archivo) {
   if (!archivo || !estado.escena) return;
+  if (muestra) {
+    return aviso('En la versión de muestra no se pueden subir archivos. Hacelo desde la herramienta en la compu.', 'error', 7000);
+  }
   aviso('Leyendo el plano…');
   try {
     const texto = await archivo.text();
@@ -3746,6 +3772,7 @@ async function cargarDatosGenerales() {
 }
 
 async function guardarDatosGenerales(nombre) {
+  if (muestra) return aviso('En la versión de muestra el catálogo y los bloques no se guardan.', 'error', 6000);
   try {
     const r = await fetch(`/api/datos/${nombre}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nombre === 'catalogo' ? catalogo : bloques, null, 1) });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Error ${r.status}`);
@@ -3883,7 +3910,7 @@ function htmlCapasPropias() {
 let calibracion = null;
 const texturas = new Map();
 
-const urlFondo = () => (estado.escena?.fondo ? `/fotos/${estado.slug}/${encodeURIComponent(estado.escena.fondo.archivo)}` : null);
+const urlFondo = () => (estado.escena?.fondo ? `fotos/${estado.slug}/${encodeURIComponent(estado.escena.fondo.archivo)}` : null);
 
 function cargarTexturaFondo(url) {
   if (!texturas.has(url)) {
@@ -3947,6 +3974,9 @@ const marcaArchivo = () => {
 // Guarda la imagen en fotos/<escena>/ y la pone de fondo, del tamaño aproximado del lugar, para calibrarla.
 async function ponerImagenFondo(blob) {
   if (!estado.escena || !blob?.type?.startsWith('image/')) return;
+  if (muestra) {
+    return aviso('En la versión de muestra no se pueden subir archivos. Hacelo desde la herramienta en la compu.', 'error', 7000);
+  }
   const ext = blob.type === 'image/jpeg' ? '.jpg' : blob.type === 'image/webp' ? '.webp' : '.png';
   aviso('Guardando la imagen…');
   try {
@@ -5123,7 +5153,10 @@ function conectarInterfaz() {
     if (slug && slug !== estado.slug && listaEscenas.some((x) => x.slug === slug)) abrirEscena(slug);
   });
 
-  // Cambios en disco (por ejemplo, cuando Claude edita la escena)
+}
+
+// Cambios en disco (por ejemplo, cuando Claude edita la escena). Solo con el servidor de la compu.
+function conectarEventos() {
   const eventos = new EventSource('/api/eventos');
   eventos.onmessage = async (ev) => {
     const d = JSON.parse(ev.data);
@@ -5159,6 +5192,8 @@ async function iniciar() {
     document.documentElement.classList.add('sin-servidor');
     return;
   }
+  if (muestra) aviso('Versión de muestra: podés recorrer las escenas y probar todo, pero los cambios no se guardan. La herramienta completa se usa en la compu.', 'ok', 10000);
+  else conectarEventos();
   const deseado = slugDeDireccion() || pref.slug;
   const slug = listaEscenas.find((x) => x.slug === deseado)?.slug || listaEscenas[0]?.slug;
   if (slug) await abrirEscena(slug);

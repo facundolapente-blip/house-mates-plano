@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "echo Sin dependencias",
+  "buildCommand": "node scripts/armar-sitio.mjs",
+  "outputDirectory": "_site",
+  "regions": ["gru1"]
+}
