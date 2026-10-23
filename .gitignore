@@ -18,3 +18,6 @@ desktop.ini
 # Versión de muestra armada para publicar (scripts/armar-sitio.mjs)
 _site/
 .vercel/
+
+.vercel
+.env*
