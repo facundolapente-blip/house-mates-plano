@@ -1,0 +1,1251 @@
+/* Checklist del armado (celular). Identidad House Mates: base #0A0A0A, General Sans, azul #2447F5,
+   cálido #E8AA4C solo para medidas, verde #2FBF71 para lo que está bien y rojo #FF3B30 para problemas.
+   Pensado para usar parado, con una mano y a pleno sol: toques grandes y mucho contraste. */
+
+:root {
+  --fondo: #0a0a0a;
+  --panel: #131316;
+  --panel-2: #1b1b1f;
+  --linea: #2a2a30;
+  --linea-2: #3a3a42;
+  --tinta: #fafafa;
+  --tinta-2: #c8c8d0;
+  --tinta-3: #8e8e98;
+  --acento: #2447f5;
+  --acento-texto: #8aa0ff;
+  --calido: #e8aa4c;
+  --calido-tinta: #1d1405;
+  --verde: #2fbf71;
+  --verde-texto: #4fd88d;
+  --rojo: #ff3b30;
+  --rojo-texto: #ff6b62;
+  --tinte-llego: rgba(36, 71, 245, 0.12);
+  --tinte-armado: rgba(47, 191, 113, 0.1);
+  --tinte-problema: rgba(255, 59, 48, 0.12);
+  --sombra: 0 -12px 40px rgba(0, 0, 0, 0.55);
+  --fuente: 'General Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --borde-seguro: env(safe-area-inset-bottom, 0px);
+  color-scheme: dark;
+}
+
+/* Modo sol: fondo blanco y textos más oscuros, para leer a pleno sol. */
+html[data-tema='claro'] {
+  --fondo: #ffffff;
+  --panel: #f4f4f5;
+  --panel-2: #e9e9ec;
+  --linea: #d4d4d8;
+  --linea-2: #a1a1aa;
+  --tinta: #0a0a0a;
+  --tinta-2: #2e2e35;
+  --tinta-3: #5d5d66;
+  --acento-texto: #1c3ad6;
+  --verde-texto: #13703f;
+  --rojo-texto: #c0221a;
+  --tinte-llego: rgba(36, 71, 245, 0.09);
+  --tinte-armado: rgba(47, 191, 113, 0.14);
+  --tinte-problema: rgba(255, 59, 48, 0.1);
+  --sombra: 0 -12px 40px rgba(0, 0, 0, 0.18);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  padding-bottom: calc(32px + var(--borde-seguro));
+  font-family: var(--fuente);
+  font-size: 16px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+  background: var(--fondo);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body.sin-red {
+  padding-bottom: calc(120px + var(--borde-seguro));
+}
+
+[hidden] {
+  display: none !important;
+}
+
+button,
+input,
+textarea,
+a.boton {
+  font: inherit;
+  color: inherit;
+}
+
+button,
+a.boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 18px;
+  border: 1.5px solid var(--linea-2);
+  border-radius: 12px;
+  background: var(--panel-2);
+  font-weight: 600;
+  font-size: 16px;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+.primario {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: #fff;
+}
+
+:focus-visible {
+  outline: 3px solid var(--acento-texto);
+  outline-offset: 2px;
+}
+
+.ico {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cargando {
+  margin: 48px 16px;
+  text-align: center;
+  color: var(--tinta-2);
+}
+
+/* ------------------------------------------------------------ encabezado */
+
+.encabezado {
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 14px;
+}
+
+.enc-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 48px;
+}
+
+.marca {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: none;
+  min-height: 44px;
+  color: var(--tinta);
+  text-decoration: none;
+}
+
+.marca-nombre {
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.marca-sub {
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--tinta-3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.enc-acciones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.boton-quien {
+  min-height: 44px;
+  max-width: 46vw;
+  padding: 0 12px;
+  border-radius: 22px;
+  font-size: 15px;
+}
+
+.boton-quien span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boton-icono {
+  width: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+  border-radius: 24px;
+}
+
+.evento {
+  margin: 14px 0 2px;
+  font-size: 28px;
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.evento-meta {
+  margin: 0;
+  color: var(--tinta-2);
+  font-size: 15px;
+}
+
+.nota-error {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--tinte-problema);
+  border: 1.5px solid var(--rojo);
+  color: var(--tinta);
+  font-weight: 500;
+}
+
+/* Avance: número grande y barra apilada (armado, llegó, problema). */
+.avance {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.avance-num {
+  display: flex;
+  align-items: baseline;
+  flex: none;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.avance-num strong {
+  font-size: 48px;
+  letter-spacing: -0.03em;
+}
+
+.avance-num span {
+  font-size: 22px;
+  color: var(--tinta-2);
+  margin-left: 2px;
+}
+
+.avance-der {
+  flex: 1;
+  min-width: 0;
+}
+
+.barra,
+.barra-mini {
+  display: flex;
+  overflow: hidden;
+  background: var(--panel-2);
+  border-radius: 8px;
+}
+
+.barra {
+  height: 16px;
+  border: 1px solid var(--linea);
+}
+
+.barra i {
+  display: block;
+  height: 100%;
+  transition: width 0.25s ease;
+}
+
+.seg-armado {
+  background: var(--verde);
+}
+
+.seg-llego {
+  background: var(--acento);
+}
+
+.seg-problema {
+  background: var(--rojo);
+}
+
+.leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--tinta-2);
+}
+
+.leyenda .l {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.leyenda .l::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--tinta-3);
+}
+
+.leyenda b {
+  color: var(--tinta);
+}
+
+.l-armado::before {
+  background: var(--verde) !important;
+}
+
+.l-llego::before {
+  background: var(--acento) !important;
+}
+
+.l-problema::before {
+  background: var(--rojo) !important;
+}
+
+.l-pendiente::before {
+  background: transparent !important;
+  border: 2px solid var(--tinta-3);
+}
+
+.l-total {
+  color: var(--tinta-3);
+}
+
+/* Por categoría / Por proveedor */
+.agrupar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1px solid var(--linea);
+}
+
+.agrupar button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--tinta-2);
+  font-size: 15px;
+}
+
+.agrupar button[aria-checked='true'] {
+  background: var(--panel-2);
+  color: var(--tinta);
+  box-shadow: inset 0 0 0 1.5px var(--linea-2);
+}
+
+/* ------------------------------------------------------------ barra fija con los filtros */
+
+.barra-fija {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--fondo);
+  border-bottom: 1px solid var(--linea);
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 22px;
+  border: 1.5px solid var(--linea-2);
+  background: var(--panel);
+  color: var(--tinta);
+  font-size: 15px;
+  gap: 7px;
+}
+
+.chip b {
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 11px;
+  background: var(--panel-2);
+  color: var(--tinta-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.chip[aria-checked='true'] {
+  background: var(--tinta);
+  border-color: var(--tinta);
+  color: var(--fondo);
+}
+
+.chip[aria-checked='true'] b {
+  background: var(--fondo);
+  color: var(--tinta);
+}
+
+.chip-problema b {
+  color: var(--rojo-texto);
+}
+
+/* Avance siempre a la vista mientras se baja por la lista. */
+.barra-mini {
+  height: 4px;
+  border-radius: 0;
+}
+
+.barra-mini .seg-armado {
+  width: var(--armado, 0%);
+}
+
+.barra-mini .seg-llego {
+  width: var(--llego, 0%);
+}
+
+.barra-mini .seg-problema {
+  width: var(--problema, 0%);
+}
+
+/* ------------------------------------------------------------ lista */
+
+.contenido {
+  padding: 4px 12px 0;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.ayuda {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 4px 4px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1.5px dashed var(--linea-2);
+  color: var(--tinta-2);
+  font-size: 15px;
+}
+
+.ayuda p {
+  margin: 0;
+}
+
+.ayuda b {
+  color: var(--tinta);
+}
+
+.ayuda button {
+  align-self: flex-start;
+  min-height: 44px;
+}
+
+.seccion {
+  margin-top: 20px;
+}
+
+.seccion-cab {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.seccion-cab h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--tinta-2);
+}
+
+.seccion-cuenta {
+  flex: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tinta-3);
+}
+
+.seccion-cuenta.completa {
+  color: var(--verde-texto);
+}
+
+.seccion-det {
+  margin: 4px 4px 0;
+  font-size: 14px;
+  color: var(--tinta-2);
+}
+
+.llamar {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  margin-left: 4px;
+  border-radius: 18px;
+  background: var(--acento);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.lista {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fila {
+  --estado: var(--tinta-3);
+  --estado-texto: var(--tinta-2);
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-height: 80px;
+  border-radius: 16px;
+  border: 1.5px solid var(--linea);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.fila::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: var(--estado);
+}
+
+.fila[data-estado='pendiente']::before {
+  background: transparent;
+}
+
+.fila[data-estado='llego'] {
+  --estado: var(--acento);
+  --estado-texto: var(--acento-texto);
+  background: var(--tinte-llego);
+}
+
+.fila[data-estado='armado'] {
+  --estado: var(--verde);
+  --estado-texto: var(--verde-texto);
+  background: var(--tinte-armado);
+}
+
+.fila[data-estado='problema'] {
+  --estado: var(--rojo);
+  --estado-texto: var(--rojo-texto);
+  background: var(--tinte-problema);
+  border-color: var(--rojo);
+}
+
+.fila-tocar {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  min-height: 80px;
+  padding: 12px 8px 12px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font-weight: 400;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.fila-tocar:active,
+.fila-tocar.apretando {
+  transform: none;
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.fila-tocar.apretando .indicador {
+  transform: scale(0.9);
+}
+
+/* Círculo de estado: vacío (falta), flecha que baja (llegó), tilde (armado) o advertencia (problema).
+   Forma y color distintos, así se distingue también sin ver colores. */
+.indicador {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 2.5px solid var(--tinta-3);
+  transition: transform 0.15s ease;
+}
+
+.indicador .ico {
+  width: 26px;
+  height: 26px;
+  stroke-width: 2.6;
+}
+
+[data-estado='llego'] > .indicador,
+.fila[data-estado='llego'] .indicador {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: #fff;
+}
+
+[data-estado='armado'] > .indicador,
+.fila[data-estado='armado'] .indicador {
+  background: var(--verde);
+  border-color: var(--verde);
+  color: #0a0a0a;
+}
+
+[data-estado='problema'] > .indicador,
+.fila[data-estado='problema'] .indicador {
+  background: var(--rojo);
+  border-color: var(--rojo);
+  color: #fff;
+}
+
+.fila[data-mixto] .indicador {
+  border-style: dashed;
+  border-color: var(--tinta);
+}
+
+.fila-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.fila-nombre {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--tinta);
+  overflow-wrap: anywhere;
+}
+
+.ico-tipo {
+  width: 18px;
+  height: 18px;
+  color: var(--tinta-3);
+}
+
+.cantidad {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: var(--tinta);
+  color: var(--fondo);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.fila-det,
+.hoja-det {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 8px;
+  font-size: 14px;
+  color: var(--tinta-2);
+}
+
+/* Las medidas se ven como un pedazo de cinta métrica, igual que en la compu. */
+.medida {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--calido);
+  color: var(--calido-tinta);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.fila-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--estado-texto);
+}
+
+.guardando {
+  padding: 0 7px;
+  border-radius: 8px;
+  border: 1px solid var(--calido);
+  color: var(--calido);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+html[data-tema='claro'] .guardando {
+  color: var(--calido-tinta);
+  background: var(--calido);
+}
+
+.fila-nota {
+  margin-top: 3px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--tinta);
+  font-size: 14px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fila[data-estado='problema'] .fila-nota {
+  background: transparent;
+  border: 1.5px solid var(--rojo);
+}
+
+.fila-foto,
+.fila-mas {
+  flex: none;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--linea);
+  border-radius: 0;
+  background: transparent;
+  color: var(--tinta-2);
+}
+
+.fila-foto {
+  width: 56px;
+}
+
+.fila-mas {
+  width: 44px;
+}
+
+.fila-foto .ico {
+  width: 26px;
+  height: 26px;
+}
+
+.fila-foto img {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1.5px solid var(--linea-2);
+}
+
+.vacio {
+  margin: 40px 8px;
+  text-align: center;
+  color: var(--tinta-2);
+}
+
+.vacio h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  color: var(--tinta);
+}
+
+.vacio p {
+  margin: 0 0 16px;
+}
+
+/* ------------------------------------------------------------ elegir escena */
+
+.escenas {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.escena {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 72px;
+  justify-content: center;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1.5px solid var(--linea);
+  background: var(--panel);
+  color: var(--tinta);
+  text-decoration: none;
+}
+
+.escena:active {
+  background: var(--panel-2);
+}
+
+.escena-nombre {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.escena-fecha {
+  font-size: 14px;
+  color: var(--tinta-3);
+}
+
+/* ------------------------------------------------------------ sin conexión y avisos */
+
+.sin-conexion {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px calc(12px + var(--borde-seguro));
+  background: var(--calido);
+  color: var(--calido-tinta);
+  font-weight: 600;
+  font-size: 15px;
+  box-shadow: var(--sombra);
+}
+
+.sin-conexion span {
+  flex: 1;
+}
+
+.sin-conexion button {
+  flex: none;
+  background: var(--calido-tinta);
+  border-color: var(--calido-tinta);
+  color: #fff;
+}
+
+.aviso {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(16px + var(--borde-seguro));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 560px;
+  margin: 0 auto;
+  min-height: 56px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 14px;
+  background: var(--tinta);
+  color: var(--fondo);
+  font-weight: 600;
+  font-size: 15px;
+  box-shadow: var(--sombra);
+}
+
+body.sin-red .aviso {
+  bottom: calc(96px + var(--borde-seguro));
+}
+
+.aviso span {
+  flex: 1;
+}
+
+.aviso button {
+  flex: none;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--acento);
+  font-weight: 700;
+}
+
+html[data-tema='claro'] .aviso button {
+  color: #8aa0ff;
+}
+
+.aviso-error {
+  background: var(--rojo);
+  color: #fff;
+}
+
+.aviso-error button {
+  color: #fff !important;
+  text-decoration: underline;
+}
+
+.aviso-ok {
+  background: var(--verde);
+  color: #0a0a0a;
+}
+
+.aviso-ok button {
+  color: #0a0a0a !important;
+  text-decoration: underline;
+}
+
+/* ------------------------------------------------------------ hoja de opciones (abajo) */
+
+dialog {
+  color: var(--tinta);
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.hoja {
+  position: fixed;
+  inset: auto 0 0 0;
+  width: 100%;
+  max-width: 640px;
+  max-height: 92dvh;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 22px 22px 0 0;
+  background: var(--panel);
+  box-shadow: var(--sombra);
+  overflow: hidden;
+}
+
+.hoja[open] {
+  display: flex;
+  flex-direction: column;
+  animation: subir 0.18s ease-out;
+}
+
+@keyframes subir {
+  from {
+    transform: translateY(24px);
+  }
+}
+
+.hoja-cuerpo {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 16px calc(20px + var(--borde-seguro));
+}
+
+.hoja-cab {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hoja-tit {
+  min-width: 0;
+}
+
+.hoja-cab h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 22px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.hoja-cab h2 .ico-tipo {
+  width: 22px;
+  height: 22px;
+}
+
+.hoja-meta {
+  margin: 12px 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--tinta-2);
+}
+
+.hoja-estados {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.estado-btn {
+  justify-content: flex-start;
+  min-height: 64px;
+  padding: 0 12px;
+  border-radius: 14px;
+  font-size: 17px;
+  gap: 10px;
+}
+
+.estado-btn .indicador {
+  width: 38px;
+  height: 38px;
+}
+
+.estado-btn .indicador .ico {
+  width: 22px;
+  height: 22px;
+}
+
+.estado-btn[aria-pressed='true'] {
+  border-width: 2.5px;
+  border-color: var(--tinta);
+  background: var(--panel-2);
+}
+
+.estado-btn[data-estado='llego'] .indicador {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: #fff;
+}
+
+.estado-btn[data-estado='armado'] .indicador {
+  background: var(--verde);
+  border-color: var(--verde);
+  color: #0a0a0a;
+}
+
+.estado-btn[data-estado='problema'] .indicador {
+  background: var(--rojo);
+  border-color: var(--rojo);
+  color: #fff;
+}
+
+.estado-btn[data-estado='problema'][aria-pressed='true'] {
+  border-color: var(--rojo);
+  background: var(--tinte-problema);
+}
+
+.hoja-label {
+  display: block;
+  margin: 18px 0 6px;
+  font-weight: 600;
+}
+
+.hoja-label span {
+  font-weight: 400;
+  color: var(--tinta-3);
+  font-size: 14px;
+}
+
+textarea,
+.dialogo input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--linea-2);
+  background: var(--fondo);
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 88px;
+}
+
+.hoja-fila-derecha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.hoja-foto {
+  margin-top: 16px;
+}
+
+.foto-grande {
+  display: block;
+}
+
+.foto-grande img {
+  display: block;
+  width: 100%;
+  max-height: 46dvh;
+  object-fit: contain;
+  border-radius: 14px;
+  background: #000;
+}
+
+.subiendo {
+  margin-right: auto;
+  color: var(--tinta-2);
+  font-weight: 600;
+}
+
+.ancho {
+  width: 100%;
+  min-height: 56px;
+}
+
+.hoja-unidades h3 {
+  margin: 22px 0 8px;
+  font-size: 16px;
+}
+
+.hoja-unidades h3 span {
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--tinta-3);
+}
+
+.hoja-unidades ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.unidad {
+  width: 100%;
+  justify-content: space-between;
+  min-height: 52px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.unidad span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pastilla {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--tinta-3);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tinta-2);
+}
+
+.unidad[data-estado='llego'] .pastilla {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: #fff;
+}
+
+.unidad[data-estado='armado'] .pastilla {
+  background: var(--verde);
+  border-color: var(--verde);
+  color: #0a0a0a;
+}
+
+.unidad[data-estado='problema'] .pastilla {
+  background: var(--rojo);
+  border-color: var(--rojo);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------ ¿quién sos? */
+
+.dialogo {
+  width: min(420px, calc(100% - 32px));
+  padding: 22px 18px 18px;
+  border: 1px solid var(--linea-2);
+  border-radius: 20px;
+  background: var(--panel);
+}
+
+.dialogo h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.dialogo p {
+  margin: 0 0 14px;
+  color: var(--tinta-2);
+}
+
+.dialogo-botones {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.dialogo-botones button {
+  min-width: 120px;
+}
+
+@media (min-width: 700px) {
+  .encabezado,
+  .barra-fija .chips {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+
+  .encabezado {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

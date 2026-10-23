@@ -1,0 +1,106 @@
+{
+  "nombre": "Ejemplo: galpón con patio",
+  "notas": "Escena de muestra con medidas inventadas. Origen 0,0: esquina del fondo a la izquierda, mirando desde la entrada.",
+  "densidad": [2, 3],
+  "areas": [
+    {
+      "id": "galpon",
+      "nombre": "Galpón",
+      "contorno": [[0, 0], [16, 0], [16, 10], [0, 10]],
+      "piso": "#cfd3d4",
+      "paredes": { "alto": 5, "espesor": 0.25 },
+      "aberturas": [
+        { "pared": 0, "tipo": "ventana", "desde": 2, "ancho": 2.5, "alto": 1, "antepecho": 3.4 },
+        { "pared": 0, "tipo": "ventana", "desde": 11.5, "ancho": 2.5, "alto": 1, "antepecho": 3.4 },
+        { "pared": 1, "tipo": "puerta", "desde": 6, "ancho": 1.6, "alto": 2.4, "nombre": "Al patio" },
+        { "pared": 2, "tipo": "porton", "desde": 6.5, "ancho": 3, "alto": 3.2, "nombre": "Entrada" },
+        { "pared": 3, "tipo": "puerta", "desde": 1.5, "ancho": 1.2, "alto": 2.1, "salida": true, "nombre": "Salida de emergencia" }
+      ]
+    },
+    {
+      "id": "patio",
+      "nombre": "Patio",
+      "contorno": [[16.25, 0], [24, 0], [24, 10], [16.25, 10]],
+      "piso": "#b9bfae",
+      "techo": false,
+      "paredes": { "alto": 2.6, "espesor": 0.2, "sin": [3] }
+    }
+  ],
+  "objetos": [
+    { "id": "columna-1", "tipo": "columna", "nombre": "Columna 1", "pos": [5.3, 6.6], "rot": 0, "dims": [0.35, 0.35, 5], "fijo": true },
+    { "id": "columna-2", "tipo": "columna", "nombre": "Columna 2", "pos": [10.7, 6.6], "rot": 0, "dims": [0.35, 0.35, 5], "fijo": true },
+    { "id": "tarima", "tipo": "tarima", "nombre": "Escenario", "pos": [8, 1.5], "rot": 0, "dims": [6, 3, 0.6] },
+    { "id": "cabina", "tipo": "cabina_dj", "nombre": "Cabina DJ", "pos": [8, 1.5], "elev": 0.6, "rot": 0, "dims": [2, 0.8, 1.05] },
+    { "id": "pantalla", "tipo": "pantalla", "nombre": "Pantalla LED", "pos": [8, 0.08], "elev": 1.9, "rot": 0, "dims": [4, 0.12, 2.2] },
+    { "id": "sub-izq", "tipo": "sub", "nombre": "Sub izquierdo", "pos": [4.4, 2.6], "rot": -10, "dims": [0.75, 0.8, 0.65] },
+    { "id": "sub-der", "tipo": "sub", "nombre": "Sub derecho", "pos": [11.6, 2.6], "rot": 10, "dims": [0.75, 0.8, 0.65] },
+    { "id": "top-izq", "tipo": "parlante", "nombre": "Top izquierdo", "pos": [4.4, 2.6], "elev": 0.65, "rot": -10, "dims": [0.6, 0.55, 1.1] },
+    { "id": "top-der", "tipo": "parlante", "nombre": "Top derecho", "pos": [11.6, 2.6], "elev": 0.65, "rot": 10, "dims": [0.6, 0.55, 1.1] },
+    { "id": "torre-izq", "tipo": "truss", "nombre": "Torre truss izquierda", "pos": [4.35, 3.4], "rot": 0, "dims": [0.3, 0.3, 4] },
+    { "id": "torre-der", "tipo": "truss", "nombre": "Torre truss derecha", "pos": [11.65, 3.4], "rot": 0, "dims": [0.3, 0.3, 4] },
+    { "id": "truss-frente", "tipo": "truss", "nombre": "Truss frontal", "pos": [8, 3.4], "elev": 4, "rot": 0, "dims": [7.6, 0.3, 0.3] },
+    {
+      "id": "cabezal-1",
+      "tipo": "luz",
+      "nombre": "Cabezal 1",
+      "pos": [5.6, 3.4],
+      "elev": 3.55,
+      "rot": 0,
+      "dims": [0.35, 0.35, 0.45],
+      "luz": "#ff3ea5",
+      "apunta": [6, 6.5]
+    },
+    {
+      "id": "cabezal-2",
+      "tipo": "luz",
+      "nombre": "Cabezal 2",
+      "pos": [7.2, 3.4],
+      "elev": 3.55,
+      "rot": 0,
+      "dims": [0.35, 0.35, 0.45],
+      "luz": "#36c6ff",
+      "apunta": [7.5, 5.5]
+    },
+    {
+      "id": "cabezal-3",
+      "tipo": "luz",
+      "nombre": "Cabezal 3",
+      "pos": [8.8, 3.4],
+      "elev": 3.55,
+      "rot": 0,
+      "dims": [0.35, 0.35, 0.45],
+      "luz": "#36c6ff",
+      "apunta": [8.5, 5.5]
+    },
+    {
+      "id": "cabezal-4",
+      "tipo": "luz",
+      "nombre": "Cabezal 4",
+      "pos": [10.4, 3.4],
+      "elev": 3.55,
+      "rot": 0,
+      "dims": [0.35, 0.35, 0.45],
+      "luz": "#ff3ea5",
+      "apunta": [10, 6.5]
+    },
+    { "id": "pista", "tipo": "zona", "nombre": "Pista", "pos": [8, 5.7], "rot": 0, "dims": [7.4, 3.8, 0], "color": "#6d5cff" },
+    { "id": "barra", "tipo": "barra", "nombre": "Barra", "pos": [1.95, 5.5], "rot": 270, "dims": [5, 0.7, 1.1] },
+    { "id": "heladera-1", "tipo": "heladera", "nombre": "Heladera 1", "pos": [0.4, 4.3], "rot": 270, "dims": [0.7, 0.7, 1.85] },
+    { "id": "heladera-2", "tipo": "heladera", "nombre": "Heladera 2", "pos": [0.4, 5.1], "rot": 270, "dims": [0.7, 0.7, 1.85] },
+    { "id": "matafuego-1", "tipo": "matafuego", "nombre": "Matafuego salida", "pos": [0.15, 7.1], "rot": 270, "dims": [0.18, 0.18, 0.6] },
+    { "id": "matafuego-2", "tipo": "matafuego", "nombre": "Matafuego entrada", "pos": [10.1, 9.85], "rot": 180, "dims": [0.18, 0.18, 0.6] },
+    { "id": "guardarropa", "tipo": "mesa", "nombre": "Guardarropa", "pos": [14.4, 9.3], "rot": 180, "dims": [2, 0.7, 0.9], "color": "#9c8a72" },
+    { "id": "persona-1", "tipo": "persona", "nombre": "Persona", "pos": [6.6, 5.2], "rot": 180, "dims": [0.5, 0.3, 1.75] },
+    { "id": "persona-2", "tipo": "persona", "nombre": "Persona 2", "pos": [9.3, 6.4], "rot": 180, "dims": [0.5, 0.3, 1.7] },
+    { "id": "bano-1", "tipo": "bano_quimico", "nombre": "Baño 1", "pos": [18, 0.7], "rot": 0, "dims": [1.15, 1.15, 2.3] },
+    { "id": "bano-2", "tipo": "bano_quimico", "nombre": "Baño 2", "pos": [19.3, 0.7], "rot": 0, "dims": [1.15, 1.15, 2.3] },
+    { "id": "bano-3", "tipo": "bano_quimico", "nombre": "Baño 3", "pos": [20.6, 0.7], "rot": 0, "dims": [1.15, 1.15, 2.3] },
+    { "id": "fumadores", "tipo": "zona", "nombre": "Fumadores", "pos": [20.2, 7.2], "rot": 0, "dims": [6.5, 4.6, 0], "color": "#24a46b" },
+    { "id": "sillon-1", "tipo": "sillon", "nombre": "Sillón 1", "pos": [22.9, 6.2], "rot": 90, "dims": [2, 0.85, 0.8] },
+    { "id": "sillon-2", "tipo": "sillon", "nombre": "Sillón 2", "pos": [22.9, 8.5], "rot": 90, "dims": [2, 0.85, 0.8] },
+    { "id": "mesa-alta-1", "tipo": "mesa_alta", "nombre": "Mesa alta 1", "pos": [18.3, 5.6], "rot": 0, "dims": [0.7, 0.7, 1.05] },
+    { "id": "mesa-alta-2", "tipo": "mesa_alta", "nombre": "Mesa alta 2", "pos": [19.9, 8.6], "rot": 0, "dims": [0.7, 0.7, 1.05] },
+    { "id": "planta-1", "tipo": "planta", "nombre": "Planta", "pos": [23.5, 0.5], "rot": 0, "dims": [0.7, 0.7, 1.6] },
+    { "id": "planta-2", "tipo": "planta", "nombre": "Planta 2", "pos": [16.75, 9.5], "rot": 0, "dims": [0.6, 0.6, 1.3] }
+  ]
+}

@@ -1,0 +1,16 @@
+# Diseños de otra cosa (no son parte de la herramienta)
+posteos/
+
+# Respaldos automáticos, estado del checklist y temporales
+escenas/.respaldos/
+escenas/.checklist/
+*.tmp
+
+# Configuración de cada computadora
+config.json
+.claude/settings.local.json
+
+node_modules/
+.DS_Store
+Thumbs.db
+desktop.ini

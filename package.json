@@ -1,0 +1,13 @@
+{
+  "name": "housemates-plano",
+  "version": "1.0.0",
+  "private": true,
+  "description": "House Mates Plano: maquetación 3D a escala, planos y cómputo de materiales para los eventos House Mates",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs --abrir"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

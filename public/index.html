@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="es" data-tema="oscuro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>House Mates Plano</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230A0A0A'/%3E%3Cpath d='M7 25V14.5l9-7 9 7V25' fill='none' stroke='%232447F5' stroke-width='3'/%3E%3C/svg%3E">
+  <!-- Todo se carga desde public/vendor para que funcione sin internet (ver vendor/LEEME.md). -->
+  <link rel="stylesheet" href="vendor/fuentes/general-sans.css">
+  <link rel="stylesheet" href="estilos.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/build/three.module.min.js",
+        "three/addons/": "./vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+  <script>
+    if (location.protocol === 'file:') document.documentElement.classList.add('sin-servidor');
+    try {
+      var p = JSON.parse(localStorage.getItem('housemates-plano:pref') || '{}');
+      if (p.tema === 'claro') document.documentElement.dataset.tema = 'claro';
+    } catch (e) {}
+    setTimeout(function () {
+      if (!window.planoListo) document.documentElement.classList.add('motor-fallo');
+    }, 12000);
+  </script>
+</head>
+<body data-vista="3d">
+  <header class="barra">
+    <button class="solo-movil boton-icono" id="btn-panel-izq" aria-controls="panel-izq" aria-expanded="false" aria-label="Capas y biblioteca" data-icono="lista"></button>
+    <div class="barra-izq">
+      <div class="marca" aria-label="House Mates Plano">
+        <span class="marca-nombre">House Mates</span>
+        <span class="marca-sub">Plano</span>
+      </div>
+      <div class="escena-sel">
+        <select id="sel-escena" aria-label="Escena"></select>
+        <details class="menu" id="menu-escena">
+          <summary class="boton-icono" aria-label="Opciones de la escena" title="Opciones de la escena">⋯</summary>
+          <div class="menu-lista">
+            <button data-accion="datos">Datos del proyecto</button>
+            <button data-accion="versiones">Versiones anteriores…</button>
+            <button data-accion="duplicar-escena">Duplicar escena…</button>
+            <button data-accion="nueva-escena">Nueva escena…</button>
+            <button data-accion="cerrar-app">Cerrar House Mates Plano</button>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <nav class="vistas" role="tablist" aria-label="Vista">
+      <button role="tab" data-vista="3d" aria-selected="true" title="Modelo 3D (1)" data-icono="cubo"><span>3D</span></button>
+      <button role="tab" data-vista="planta" aria-selected="false" title="Planta (2)" data-icono="planta"><span>Planta</span></button>
+      <button role="tab" data-vista="plano" aria-selected="false" title="Plano para imprimir (3)" data-icono="hoja"><span>Plano</span></button>
+      <button role="tab" data-vista="materiales" aria-selected="false" title="Listado de materiales (4)" data-icono="lista"><span>Materiales</span></button>
+    </nav>
+
+    <div class="barra-der">
+      <button id="btn-caminar" class="boton-icono" aria-pressed="false" title="Caminar adentro" data-icono="caminar"></button>
+      <button id="btn-noche" class="boton-icono" aria-pressed="false" title="Ver con luces de fiesta (N)" data-icono="luna"></button>
+      <button id="btn-fotos" class="boton-icono" aria-pressed="false" title="Fotos del lugar" data-icono="foto"><span id="cuenta-fotos" class="burbuja"></span></button>
+      <span class="sep-v"></span>
+      <details class="menu" id="menu-exportar">
+        <summary class="boton primario">Exportar</summary>
+        <div class="menu-lista menu-derecha">
+          <button data-exportar="pdf" data-icono="pdf"><span>Plano en PDF</span><small>Planta a escala y listado</small></button>
+          <button data-exportar="visor" data-icono="compartir"><span>Visor para WhatsApp</span><small>Un archivo que se abre en el celular, sin internet</small></button>
+          <button data-exportar="mapa" data-icono="mapa"><span>Mapa para el público</span><small>Historia, posteo o afiche</small></button>
+          <button data-exportar="svg" data-icono="descargar"><span>Plano en SVG</span><small>Para editar en Illustrator</small></button>
+          <button data-exportar="dxf" data-icono="descargar"><span>Plano para AutoCAD</span><small>DXF, en metros</small></button>
+          <button data-exportar="kml" data-icono="coordenadas"><span>Google Earth</span><small>KML, sobre el terreno real</small></button>
+          <button data-exportar="csv" data-icono="tabla"><span>Materiales (CSV)</span><small>Se abre en Excel o Sheets</small></button>
+          <button data-exportar="png" data-icono="imagen"><span>Imagen de la vista</span><small>PNG del 3D</small></button>
+          <button data-exportar="glb" data-icono="modelo"><span>Modelo 3D</span><small>GLB para Blender o SketchUp</small></button>
+          <button data-exportar="json" data-icono="archivo"><span>Archivo de escena</span><small>JSON</small></button>
+        </div>
+      </details>
+      <span id="guardado" class="guardado" role="status"></span>
+      <button id="btn-tema" class="boton-icono" title="Tema claro u oscuro" data-icono="tema"></button>
+      <button id="btn-ayuda" class="boton-icono" title="Atajos de teclado (?)" data-icono="ayuda"></button>
+    </div>
+    <button class="solo-movil boton-icono" id="btn-panel-der" aria-controls="panel-der" aria-expanded="false" aria-label="Detalles" data-icono="ajustes"></button>
+  </header>
+
+  <main class="cuerpo">
+    <aside id="panel-izq" class="panel panel-izq" aria-label="Capas y biblioteca">
+      <div class="pestanas" role="tablist">
+        <button role="tab" data-pestana="capas" aria-selected="true">Capas</button>
+        <button role="tab" data-pestana="biblioteca" aria-selected="false">Biblioteca</button>
+      </div>
+      <div id="capas" class="contenido-pestana" role="tabpanel">
+        <label class="buscador" data-icono="buscar"><input id="buscar-capas" type="search" placeholder="Buscar en la escena" aria-label="Buscar en la escena"></label>
+        <div id="lista"></div>
+      </div>
+      <div id="biblioteca" class="contenido-pestana" role="tabpanel" hidden>
+        <label class="buscador" data-icono="buscar"><input id="buscar-biblioteca" type="search" placeholder="Buscar objetos" aria-label="Buscar objetos"></label>
+        <p class="ayuda ayuda-biblio">Arrastrá un objeto hasta la vista, o hacé clic para ponerlo en el centro.</p>
+        <div id="catalogo"></div>
+      </div>
+    </aside>
+
+    <section id="centro">
+      <div id="visor" class="vista-3d" data-herramienta="seleccionar">
+        <div class="herramientas" role="toolbar" aria-label="Herramientas">
+          <button data-herramienta="seleccionar" aria-pressed="true" title="Seleccionar y mover (V)" data-icono="seleccionar"></button>
+          <button data-herramienta="mano" aria-pressed="false" title="Mover la vista (H o espacio)" data-icono="mano"></button>
+          <span class="sep-h"></span>
+          <button data-herramienta="medir" aria-pressed="false" title="Medir (M)" data-icono="medir"></button>
+          <button data-herramienta="cota" aria-pressed="false" title="Cota fija (C)" data-icono="cota"></button>
+          <button data-herramienta="zona" aria-pressed="false" title="Zona (Z): arrastrá para un rectángulo o hacé clic punto por punto" data-icono="poligono"></button>
+          <button data-herramienta="camino" aria-pressed="false" title="Camino (L): clic punto por punto" data-icono="camino"></button>
+        </div>
+        <div class="camaras" role="toolbar" aria-label="Cámara">
+          <button data-camara="superior" title="Vista desde arriba">Arriba</button>
+          <button data-camara="frente" title="Vista de frente">Frente</button>
+          <button data-camara="iso" title="Vista en diagonal">Diagonal</button>
+          <span class="sep-v"></span>
+          <button id="btn-encuadrar" class="boton-icono" title="Encuadrar todo o la selección (F)" data-icono="encuadrar"></button>
+        </div>
+        <div id="ayuda-herramienta" class="ayuda-flotante" hidden></div>
+        <div id="ayuda-recorrido" class="ayuda-flotante ayuda-centro" hidden>
+          <strong>Hacé clic para caminar.</strong>
+          W A S D o flechas para moverte, Shift para ir más rápido, Esc para soltar el mouse.
+        </div>
+        <div id="marquesina" hidden></div>
+        <div id="leyenda-analisis" class="leyenda-analisis" hidden></div>
+        <div id="vacio" class="vacio" hidden>
+          <h2>Todavía no hay escenas</h2>
+          <p>Creá una escena y cargá las medidas del lugar, o pedile a Claude que la arme a partir de fotos y medidas.</p>
+          <button id="btn-vacio-crear" class="boton primario">Crear escena</button>
+        </div>
+      </div>
+      <div id="hoja" hidden>
+        <div id="hoja-barra" class="hoja-barra">
+          <span id="hoja-info" class="hoja-info"></span>
+          <div class="zoom">
+            <button id="hoja-menos" class="boton-icono" title="Alejar" aria-label="Alejar">−</button>
+            <span id="hoja-zoom" class="zoom-valor">100%</span>
+            <button id="hoja-mas" class="boton-icono" title="Acercar" aria-label="Acercar">+</button>
+            <button id="hoja-ajustar" class="boton" title="Ajustar al ancho">Ajustar</button>
+          </div>
+        </div>
+        <div id="hoja-contenido" class="hoja-contenido"></div>
+      </div>
+      <div id="avisos" aria-live="polite"></div>
+    </section>
+
+    <aside id="panel-der" class="panel panel-der" aria-label="Inspector"></aside>
+  </main>
+
+  <footer class="estado">
+    <span id="cursor" class="cursor">x —   y —</span>
+    <label class="estado-control">Ajuste
+      <select id="sel-paso">
+        <option value="0.01">1 cm</option>
+        <option value="0.05">5 cm</option>
+        <option value="0.1">10 cm</option>
+        <option value="0.25">25 cm</option>
+        <option value="0.5">50 cm</option>
+        <option value="1">1 m</option>
+      </select>
+    </label>
+    <span class="sep-v"></span>
+    <label class="estado-control"><input type="checkbox" id="ver-grilla"> Grilla</label>
+    <label class="estado-control"><input type="checkbox" id="ver-cotas"> Cotas</label>
+    <label class="estado-control"><input type="checkbox" id="ver-nombres"> Nombres</label>
+    <label class="estado-control"><input type="checkbox" id="ver-copas"> Copas</label>
+    <label class="estado-control"><input type="checkbox" id="ver-transparentar"> Paredes transparentes</label>
+    <label class="estado-control"><input type="checkbox" id="ver-ao"> Sombras de contacto</label>
+    <label class="estado-control"><input type="checkbox" id="ver-fondo"> Fondo</label>
+    <span class="estado-espacio"></span>
+    <span id="info-sel" class="info-sel"></span>
+    <button id="btn-deshacer" class="boton-icono" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" data-icono="deshacer" disabled></button>
+    <button id="btn-rehacer" class="boton-icono" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" data-icono="rehacer" disabled></button>
+  </footer>
+
+  <aside id="fotos" class="cajon" aria-label="Fotos del lugar" hidden>
+    <header>
+      <h2>Fotos del lugar</h2>
+      <button id="btn-cerrar-fotos" class="boton-icono" aria-label="Cerrar fotos" data-icono="cerrar"></button>
+    </header>
+    <label class="soltar">
+      <input type="file" id="fotos-archivo" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
+      <span><strong>Elegí fotos</strong> o arrastralas a cualquier parte de la ventana.</span>
+      <small>Se guardan en la carpeta <code id="fotos-carpeta">fotos</code>, donde Claude también las puede ver.</small>
+    </label>
+    <div id="fotos-rejilla" class="fotos-rejilla"></div>
+  </aside>
+
+  <dialog id="dlg-escena" aria-labelledby="dlg-escena-titulo">
+    <form method="dialog">
+      <h2 id="dlg-escena-titulo">Nueva escena</h2>
+      <label class="campo"><span>Nombre</span><input id="dlg-escena-nombre" required maxlength="80" autocomplete="off"></label>
+      <p id="dlg-escena-ayuda" class="ayuda"></p>
+      <div class="fila-botones derecha">
+        <button type="button" id="dlg-escena-cancelar" class="boton">Cancelar</button>
+        <button type="submit" value="crear" id="dlg-escena-crear" class="boton primario">Crear escena</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-repetir" aria-labelledby="dlg-repetir-titulo">
+    <form method="dialog">
+      <h2 id="dlg-repetir-titulo">Repetir en filas y columnas</h2>
+      <div class="campos">
+        <label class="campo"><span>Columnas</span><input id="rep-columnas" inputmode="numeric" autocomplete="off"></label>
+        <label class="campo"><span>Separación entre columnas</span><span class="entrada" data-unidad="m"><input id="rep-sepx" inputmode="decimal" autocomplete="off"></span></label>
+        <label class="campo"><span>Filas</span><input id="rep-filas" inputmode="numeric" autocomplete="off"></label>
+        <label class="campo"><span>Separación entre filas</span><span class="entrada" data-unidad="m"><input id="rep-sepy" inputmode="decimal" autocomplete="off"></span></label>
+      </div>
+      <p id="rep-ayuda" class="ayuda"></p>
+      <p class="ayuda">La separación va de centro a centro. Ejemplo: 10 sillas en 2 filas son 5 columnas y 2 filas.</p>
+      <div class="fila-botones derecha">
+        <button type="button" id="dlg-repetir-cancelar" class="boton">Cancelar</button>
+        <button type="submit" value="ok" class="boton primario">Repetir</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-ayuda" aria-labelledby="dlg-ayuda-titulo" class="dlg-ancho">
+    <h2 id="dlg-ayuda-titulo">Atajos de teclado</h2>
+    <div class="atajos-columnas">
+      <dl class="atajos">
+        <dt>V</dt><dd>Seleccionar y mover</dd>
+        <dt>H o espacio</dt><dd>Mover la vista</dd>
+        <dt>M</dt><dd>Medir</dd>
+        <dt>C</dt><dd>Cota fija</dd>
+        <dt>Z</dt><dd>Dibujar zona</dd>
+        <dt>1 2 3 4</dt><dd>3D, planta, plano, materiales</dd>
+        <dt>F</dt><dd>Encuadrar todo o la selección</dd>
+        <dt>N</dt><dd>Modo noche</dd>
+      </dl>
+      <dl class="atajos">
+        <dt>Shift + clic</dt><dd>Sumar o sacar de la selección</dd>
+        <dt>Arrastrar en el vacío</dt><dd>Recuadro de selección (en 3D, con Shift)</dd>
+        <dt>Alt al arrastrar</dt><dd>Sin ajuste a la grilla</dd>
+        <dt>R / Shift+R</dt><dd>Girar 15° / 90°</dd>
+        <dt>Flechas</dt><dd>Mover un paso (Shift: diez)</dd>
+        <dt>Ctrl+C / Ctrl+V</dt><dd>Copiar y pegar, también entre escenas</dd>
+        <dt>Ctrl+D</dt><dd>Duplicar</dd>
+        <dt>Ctrl+A</dt><dd>Seleccionar todo lo que no está fijo</dd>
+        <dt>Supr</dt><dd>Eliminar</dd>
+        <dt>Ctrl+Z / Ctrl+Y</dt><dd>Deshacer / rehacer</dd>
+      </dl>
+    </div>
+    <div class="fila-botones derecha"><button id="dlg-ayuda-cerrar" class="boton">Cerrar</button></div>
+  </dialog>
+
+  <dialog id="dlg-versiones" aria-labelledby="dlg-versiones-titulo" class="dlg-ancho dlg-versiones">
+    <div class="versiones-cabeza">
+      <h2 id="dlg-versiones-titulo">Versiones anteriores</h2>
+      <button type="button" id="versiones-guardar" class="boton">Guardar versión ahora</button>
+    </div>
+    <p class="ayuda">Se guarda una copia sola cada vez que la escena cambia (como mucho una cada 5 minutos) y quedan las últimas 40.
+      Al volver a una, lo que tenés ahora también queda guardado, y Ctrl+Z lo deshace.</p>
+    <ol id="versiones-lista" class="versiones-lista" aria-live="polite"></ol>
+    <div class="fila-botones derecha">
+      <button type="button" id="dlg-versiones-cerrar" class="boton">Cerrar</button>
+    </div>
+  </dialog>
+
+  <input type="file" id="fondo-archivo" accept="image/png,image/jpeg,image/webp" hidden>
+  <input type="file" id="cad-archivo" accept=".dxf" hidden>
+
+  <div class="aviso-fijo aviso-cerrado">
+    <h2>House Mates Plano se cerró</h2>
+    <p>Todo quedó guardado. Para volver a usarlo, abrilo desde el acceso directo del escritorio.</p>
+  </div>
+
+  <dialog id="dlg-texto" aria-labelledby="dlg-texto-titulo">
+    <form method="dialog">
+      <h2 id="dlg-texto-titulo">Nombre</h2>
+      <label class="campo"><span id="dlg-texto-etiqueta">Nombre</span><input id="dlg-texto-valor" maxlength="80" autocomplete="off"></label>
+      <p id="dlg-texto-ayuda" class="ayuda"></p>
+      <div class="fila-botones derecha">
+        <button type="submit" value="cancelar" class="boton" formnovalidate>Cancelar</button>
+        <button type="submit" value="ok" class="boton primario">Listo</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-calibrar" aria-labelledby="dlg-calibrar-titulo" class="dlg-calibrar" data-modo="coordenadas">
+    <form method="dialog">
+      <h2 id="dlg-calibrar-titulo">Escala real de la imagen</h2>
+      <p class="ayuda">Marcaste dos puntos que en la imagen están a <strong id="cal-distancia-imagen">—</strong>. Decime cuánto miden en la realidad.</p>
+      <div class="pestanas pestanas-dialogo" role="tablist">
+        <button type="button" role="tab" data-cal-modo="coordenadas" aria-selected="true">Con coordenadas</button>
+        <button type="button" role="tab" data-cal-modo="distancia" aria-selected="false">Con una distancia</button>
+      </div>
+      <div id="cal-coordenadas">
+        <ol class="pasos">
+          <li>Abrí <strong>Google Maps</strong> (o Google Earth) en el mismo lugar.</li>
+          <li>Hacé <strong>clic derecho</strong> exactamente sobre el primer punto que marcaste y tocá los números de arriba: se copian las coordenadas.</li>
+          <li>Pegalas acá abajo. Repetí con el segundo punto.</li>
+        </ol>
+        <label class="campo"><span>Punto A</span><input id="cal-a" autocomplete="off" spellcheck="false" placeholder="-34.60372, -58.38161"></label>
+        <p id="cal-a-ok" class="validacion"></p>
+        <label class="campo"><span>Punto B</span><input id="cal-b" autocomplete="off" spellcheck="false" placeholder="-34.60411, -58.37902"></label>
+        <p id="cal-b-ok" class="validacion"></p>
+        <p id="cal-real" class="dato"></p>
+        <p class="ayuda">Con coordenadas la app también sabe dónde está el norte y dónde queda el lugar en el mapa.</p>
+      </div>
+      <div id="cal-medida" hidden>
+        <ol class="pasos">
+          <li>En <strong>Google Maps</strong>, hacé clic derecho sobre el primer punto y elegí <strong>Medir distancia</strong>.</li>
+          <li>Hacé clic sobre el segundo punto. Abajo aparece la distancia total.</li>
+          <li>Escribila acá, en metros (o usá una medida tomada en el lugar).</li>
+        </ol>
+        <label class="campo"><span>Distancia real</span><span class="entrada" data-unidad="m"><input id="cal-distancia" inputmode="decimal" autocomplete="off"></span></label>
+      </div>
+      <div class="fila-botones derecha">
+        <button type="button" id="dlg-calibrar-cancelar" class="boton">Cancelar</button>
+        <button type="submit" value="ok" class="boton primario">Poner a escala</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-foto" class="dlg-foto" aria-label="Foto ampliada"><img alt=""></dialog>
+
+  <div class="aviso-fijo aviso-sin-servidor">
+    <h2>La herramienta tiene que abrirse con el servidor</h2>
+    <p>Hacé doble clic en <strong>abrir.bat</strong> (o corré <code>node server.mjs --abrir</code> en esta carpeta). Se abre sola en el navegador.</p>
+  </div>
+  <div class="aviso-fijo aviso-motor">
+    <h2>No se pudo cargar el motor 3D</h2>
+    <p>Recargá la página. Si sigue igual, probá con Chrome o Edge actualizados (hace falta que el navegador tenga el 3D activado) o revisá que esté completa la carpeta <code>public/vendor</code>.</p>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
