@@ -16,7 +16,7 @@ import { computar, incluido, nombreCategoria } from './computo.js';
 import { CATEGORIAS, ROLES_STAFF, catDe, defDatos } from './tipos-datos.js';
 import { fm, esc, numero, slugificar } from './formato.js';
 import { esquinas, puntosMundo, esPoligono, superficieDe } from './geometria.js';
-import { lineaLocal, largoDe, USOS_CAMINO } from './predio.js';
+import { lineaLocal, largoDe, modulosVallado, USOS_CAMINO } from './predio.js';
 import { hojaPlanta, opcionesHoja, texto, linea, pts, n2, recortar, envolver, anchoTexto, TINTA, GRIS, ACENTO } from './plano2d.js';
 
 export const PESTANAS = [
@@ -650,7 +650,8 @@ export function ordenDelDia(escena) {
       out.push('', diaLargo(i.ini).toUpperCase());
       diaActual = d;
     }
-    const quien = [txt(i.t.responsable).trim() && `a cargo de ${txt(i.t.responsable).trim()}`, txt(i.t.proveedor).trim()].filter(Boolean).join(' · ');
+    const prov = txt(i.t.proveedor).trim();
+    const quien = [txt(i.t.responsable).trim() && `a cargo de ${txt(i.t.responsable).trim()}`, prov && !txt(i.t.nombre).includes(prov) && prov].filter(Boolean).join(' · ');
     const etapa = i.etapa === 'armado' ? '' : ` [${ETAPAS[i.etapa].nombre}]`;
     out.push(`  ${i.t.hecha === true ? '✓' : '·'} ${horasDe(i.ini, i.fin)}  ${txt(i.t.nombre).trim() || 'Sin nombre'}${etapa}${quien ? ` (${quien})` : ''}`);
   }
@@ -685,7 +686,7 @@ function htmlGantt(infos, v, ahora) {
   let max = Math.ceil(Math.max(...marcas) / 60) * 60;
   if (max - min < 240) max = min + 240;
   const horas = (max - min) / 60;
-  const paso = [1, 2, 3, 4, 6, 12, 24].find((p) => horas / p <= 24) || 24;
+  const paso = [1, 2, 3, 4, 6, 12, 24].find((p) => horas / p <= 12) || 24;
   const pct = (m) => n2(Math.max(0, Math.min(100, ((m - min) / (max - min)) * 100)));
 
   const regla = [];
@@ -853,13 +854,16 @@ export function todosLosProveedores(escena) {
   return res;
 }
 
+// Unidades que suma un objeto en el listado: el vallado se cuenta en paños; lo demás, de a uno.
+const unidadesDe = (o) => (o?.tipo === 'vallado' ? modulosVallado(o) : 1);
+
 // Ítems del listado de materiales que trae un proveedor: código, nombre y cuántas unidades son suyas.
 function itemsDeObjetos(comp, objetos) {
-  const ids = new Set(objetos.map((o) => o.id));
+  const porId = new Map(objetos.map((o) => [o.id, o]));
   return comp.items
-    .map((it) => ({ it, cantidad: it.ids.filter((id) => ids.has(id)).length }))
+    .map((it) => ({ it, cantidad: it.ids.reduce((s, id) => s + (porId.has(id) ? unidadesDe(porId.get(id)) : 0), 0) }))
     .filter((x) => x.cantidad)
-    .map(({ it, cantidad }) => ({ codigo: it.codigo, nombre: it.nombre, ref: it.ref, medida: it.medida, tipo: it.tipo, cantidad }));
+    .map(({ it, cantidad }) => ({ codigo: it.codigo, nombre: it.nombre, ref: it.ref, medida: it.medida, tipo: it.tipo, unidad: it.unidad || 'u', cantidad }));
 }
 
 // Número para wa.me: solo dígitos y con código de país. Un número argentino sin código ("11 5555-5555",
@@ -911,9 +915,9 @@ const RUBROS = ['Sonido', 'Luces', 'Pantallas', 'Estructuras', 'Energía', 'Barr
 function htmlTrae(items, nObjetos) {
   if (!nObjetos) return '<span class="pr-tenue">Sin objetos asignados</span>';
   const codigos = items
-    .map((i) => `<span class="pr-codigo" title="${esc(`${i.nombre}${i.ref ? ` ${i.ref}` : ''} · ${i.medida}`)}">${i.codigo}</span>${i.cantidad > 1 ? `<span class="pr-por">×${i.cantidad}</span>` : ''}`)
+    .map((i) => `<span class="pr-codigo" title="${esc(`${i.nombre}${i.ref ? ` ${i.ref}` : ''} · ${i.medida}`)}">${i.codigo}</span>${i.cantidad > 1 ? `<span class="pr-por">×${i.cantidad}${i.unidad !== 'u' ? ` ${esc(i.unidad)}` : ''}</span>` : ''}`)
     .join(' ');
-  return `<strong>${plural(nObjetos, 'unidad', 'unidades')}</strong>${codigos ? `<span class="pr-codigos">${codigos}</span>` : ''}`;
+  return `<strong>${plural(nObjetos, 'objeto')}</strong>${codigos ? `<span class="pr-codigos">${codigos}</span>` : ''}`;
 }
 
 export function htmlProveedores(escena) {
@@ -1151,7 +1155,7 @@ const precioDe = (o) => {
 };
 
 function lineaDe(objs, base) {
-  const peso = (o) => (base.porPersona ? personasDe(o) : 1);
+  const peso = (o) => (base.porPersona ? personasDe(o) : unidadesDe(o));
   const primero = objs[0];
   const conPrecio = objs.map(precioDe).filter((c) => c !== null);
   const unitario = primero ? precioDe(primero) ?? conPrecio[0] ?? null : null;
@@ -1182,27 +1186,24 @@ function lineaDe(objs, base) {
   };
 }
 
-// Presupuesto: una línea por ítem del listado de materiales (el staff, una por rol y por persona) con el
-// precio del primer objeto del grupo (los propios no se pagan), más los gastos sueltos (extras).
+// Presupuesto: una línea por ítem del listado de materiales con el precio del primer objeto del grupo (los
+// propios no se pagan; el vallado se paga por paño), una línea de staff por rol (precio por persona, código
+// "staff-<rol>") y los gastos sueltos (extras).
 export function presupuesto(escena) {
   const comp = calcular(escena);
   const moneda = monedaDe(escena);
   const porId = new Map(objetosDe(escena).map((o) => [o.id, o]));
   const lineas = [];
-  let staffHecho = false;
   for (const it of comp.items) {
+    if (it.tipo === 'puesto') continue; // el staff va aparte, por rol
     const objs = it.ids.map((id) => porId.get(id)).filter(Boolean);
-    if (it.tipo === 'puesto') {
-      if (staffHecho) continue;
-      staffHecho = true;
-      const todos = comp.items.filter((x) => x.tipo === 'puesto').flatMap((x) => x.ids.map((id) => porId.get(id)).filter(Boolean));
-      for (const rol of Object.keys(ROLES_STAFF)) {
-        const grupo = todos.filter((o) => rolDe(o) === rol);
-        if (grupo.length) lineas.push(lineaDe(grupo, { codigo: it.codigo, clave: `puesto-rol|${rol}`, nombre: `Staff: ${ROLES_STAFF[rol].nombre}`, cat: it.cat, unidad: 'personas', porPersona: true }));
-      }
-      continue;
-    }
-    lineas.push(lineaDe(objs, { codigo: it.codigo, clave: it.clave, nombre: it.nombre, ref: it.ref, medida: it.medida, cat: it.cat, unidad: 'u', proveedor: it.proveedor }));
+    lineas.push(lineaDe(objs, { codigo: it.codigo, clave: it.clave, nombre: it.nombre, ref: it.ref, medida: it.medida, cat: it.cat, unidad: it.unidad || 'u', proveedor: it.proveedor }));
+  }
+  // Staff: los puestos no van en el listado de materiales, pero sí se pagan (por persona).
+  const puestos = objetosDe(escena).filter((o) => o.tipo === 'puesto' && o.computo !== false);
+  for (const rol of Object.keys(ROLES_STAFF)) {
+    const grupo = puestos.filter((o) => rolDe(o) === rol);
+    if (grupo.length) lineas.push(lineaDe(grupo, { codigo: `staff-${rol}`, clave: `puesto-rol|${rol}`, nombre: `Staff: ${ROLES_STAFF[rol].nombre}`, cat: 'staff', unidad: 'personas', porPersona: true }));
   }
   const extras = extrasDe(escena).map((x) => {
     const monto = leerMonto(x.monto);
@@ -1285,13 +1286,13 @@ export function htmlPresupuesto(escena) {
         const precio =
           l.costoTipo === 'propio'
             ? `<span class="pr-tenue">propio</span>`
-            : campo(pre + 'costo', valorMonto(l.unitario), { ...dato, inputmode: 'decimal', clase: 'pr-monto', placeholder: 'Sin precio', 'aria-label': `Precio unitario de ${l.nombre}` }) + (l.unidad === 'personas' ? '<small class="pr-tenue">por persona</small>' : '') + (l.mixto ? '<small class="pr-nota-chica">hay precios distintos</small>' : '');
+            : campo(pre + 'costo', valorMonto(l.unitario), { ...dato, inputmode: 'decimal', clase: 'pr-monto', placeholder: 'Sin precio', 'aria-label': `Precio unitario de ${l.nombre}` }) + (l.unidad === 'personas' ? '<small class="pr-tenue">por persona</small>' : l.unidad === 'paños' ? '<small class="pr-tenue">por paño</small>' : '') + (l.mixto ? '<small class="pr-nota-chica">hay precios distintos</small>' : '');
         cuerpo +=
           `<tr class="${l.sinPrecio ? 'pr-sin-precio' : ''}" data-ids="${esc(l.ids.join(','))}">` +
-          `<td class="pr-cod">${l.codigo}</td>` +
+          `<td class="pr-cod">${typeof l.codigo === 'number' ? l.codigo : ''}</td>` +
           `<td><span class="pr-fuerte">${esc(l.nombre)}</span>${l.ref ? ` <span class="pr-tenue">${esc(l.ref)}</span>` : ''}</td>` +
           `<td class="pr-tenue">${esc(l.medida)}</td>` +
-          `<td class="pr-num">${fm(l.cantidad, 0)}${l.unidad === 'personas' ? ' pers.' : ''}</td>` +
+          `<td class="pr-num">${fm(l.cantidad, 0)}${l.unidad === 'u' ? '' : ` ${esc(l.unidad)}`}</td>` +
           `<td class="pr-num">${precio}</td>` +
           `<td>${selector(pre + 'costoTipo', l.costoTipo, TIPOS_COSTO, { ...dato, 'aria-label': 'Alquiler, compra o propio' })}</td>` +
           `<td>${campo(pre + 'proveedor', l.proveedor, { ...dato, list: 'pr-lista-proveedores', placeholder: 'Proveedor', 'aria-label': 'Proveedor' })}</td>` +
@@ -1346,7 +1347,7 @@ export function csvPresupuesto(escena) {
   const tipo = (t) => TIPOS_COSTO.find(([k]) => k === t)?.[1] || '';
   for (const l of P.lineas) {
     const nota = [l.sinPrecio && 'sin precio', l.mixto && 'precios distintos entre unidades', l.propios && l.costoTipo !== 'propio' && `${l.propios} propios`].filter(Boolean).join(', ');
-    filas.push([l.codigo, l.categoria, l.nombre, l.ref, l.medida, l.cantidad, l.unidad === 'personas' ? 'personas' : 'u', l.costoTipo ? tipo(l.costoTipo) : '', numCsv(l.unitario), l.sinPrecio ? '' : numCsv(l.subtotal), l.proveedor, nota]);
+    filas.push([typeof l.codigo === 'number' ? l.codigo : '', l.categoria, l.nombre, l.ref, l.medida, l.cantidad, l.unidad, l.costoTipo ? tipo(l.costoTipo) : '', numCsv(l.unitario), l.sinPrecio ? '' : numCsv(l.subtotal), l.proveedor, nota]);
   }
   filas.push(['', '', 'Equipos y materiales', '', '', '', '', '', '', numCsv(P.subtotalEquipos), '', '']);
   if (P.extras.length) {
@@ -1796,10 +1797,8 @@ function editarExtra(e, id, campoN, valor) {
 // Objetos de una línea del presupuesto: por su clave (data-clave, lo más seguro) o por el código del listado.
 function objetosDeGrupo(e, codigo, clave) {
   const k = txt(clave);
-  if (k.startsWith('puesto-rol|')) {
-    const rol = k.slice('puesto-rol|'.length);
-    return objetosDe(e).filter((o) => o.tipo === 'puesto' && rolDe(o) === rol);
-  }
+  const staff = k.startsWith('puesto-rol|') ? k.slice('puesto-rol|'.length) : !k && txt(codigo).startsWith('staff-') ? txt(codigo).slice('staff-'.length) : null;
+  if (staff !== null) return objetosDe(e).filter((o) => o.tipo === 'puesto' && rolDe(o) === staff);
   const comp = calcular(e);
   const it = k ? comp.items.find((i) => i.clave === k) : comp.items.find((i) => String(i.codigo) === String(codigo));
   if (!it) return [];
@@ -2175,7 +2174,7 @@ const filaItem = (it) => ({
     s += texto(x + 6, y + 1.95, String(it.codigo), { t: 1.6, peso: 700, color: ACENTO, ancla: 'middle', base: 'middle' });
     const nombre = it.ref ? `${it.nombre} ${it.ref}` : it.nombre;
     s += texto(x + 9.5, y + 2.7, recortar(nombre, 2, w - 24), { t: 2, peso: 600 });
-    s += texto(x + w - 4, y + 2.7, `× ${it.cantidad}`, { t: 2, peso: 700, ancla: 'end' });
+    s += texto(x + w - 4, y + 2.7, `× ${it.cantidad}${it.unidad && it.unidad !== 'u' ? ` ${it.unidad}` : ''}`, { t: 2, peso: 700, ancla: 'end' });
     s += texto(x + 9.5, y + 5.3, recortar(it.medida, 1.7, w - 14), { t: 1.7, color: GRIS });
     return s;
   },
@@ -2199,14 +2198,14 @@ export function hojasProveedores(escena, comp, op) {
           .map(infoTarea)
           .filter((x) => x.valida)
           .sort(porHorario);
-        const deFondo = (o) => !suyos.has(o.id) && (!incluido(o) || o.fijo || CONTEXTO.has(o.tipo));
+        const deFondo = (o) => !suyos.has(o.id) && (o.fijo || LUGAR.has(o.tipo) || CONTEXTO.has(o.tipo));
         return hojaPlanta(escena, c, opciones, totalHojas, {
           titulo: `Proveedor: ${p.nombre}`,
           numeroHoja: numeroHoja + i,
           numeros: false,
           filtro: (o) => suyos.has(o.id) || deFondo(o),
           encima: ({ M, k }) => {
-            const otros = objetosDe(escena).filter((o) => !suyos.has(o.id) && !deFondo(o) && o.tipo !== 'persona' && o.tipo !== 'etiqueta');
+            const otros = objetosDe(escena).filter((o) => !suyos.has(o.id) && !deFondo(o) && !SIN_SILUETA.has(o.tipo));
             const destacados = p.objetos.filter((o) => Array.isArray(o.dims) && Array.isArray(o.pos));
             return otros.map((o) => siluetaGris(o, M)).join('') + destacados.map((o) => resaltado(o, M, k)).join('') + numerosEnPlano(destacados, c, M, k);
           },
@@ -2218,6 +2217,9 @@ export function hojasProveedores(escena, comp, op) {
 }
 // Lo que se deja dibujado como referencia en las hojas especiales (accesos, caminos, vallados).
 const CONTEXTO = new Set(['acceso', 'camino', 'estacionamiento', 'vallado', 'control_acceso']);
+// Lo del lugar, que se deja dibujado como fondo, y lo que no tiene sentido dibujar en gris (anotaciones).
+const LUGAR = new Set(['arbol', 'hilera', 'columna', 'escalera', 'zona', 'etiqueta', 'persona']);
+const SIN_SILUETA = new Set(['persona', 'etiqueta', 'texto', 'flecha', 'marcador', 'medicion']);
 
 function columnaProveedor(p, items, tareas, ctx) {
   const d = p.datos || {};
@@ -2277,7 +2279,7 @@ export function hojaLogistica(escena, comp, op) {
     ['acceso', 'control_acceso', 'camion', 'ambulancia', 'generador', 'estacionamiento'].includes(o.tipo) ||
     (o.tipo === 'camino' && (o.uso === 'proveedores' || o.uso === 'emergencia')) ||
     (o.tipo === 'zona' && o.uso === 'descarga');
-  const deFondo = (o) => !destacado(o) && ((!incluido(o) && o.tipo !== 'zona' && o.tipo !== 'etiqueta') || (o.fijo && o.tipo !== 'zona'));
+  const deFondo = (o) => !destacado(o) && o.tipo !== 'zona' && o.tipo !== 'etiqueta' && (o.fijo || LUGAR.has(o.tipo));
   return {
     paginas: 1,
     crear(numeroHoja, totalHojas) {
@@ -2290,7 +2292,7 @@ export function hojaLogistica(escena, comp, op) {
           encima: ({ M, k }) => {
             const objs = objetosDe(escena);
             let s = objs
-              .filter((o) => !destacado(o) && !deFondo(o) && o.tipo !== 'persona' && o.tipo !== 'etiqueta')
+              .filter((o) => !destacado(o) && !deFondo(o) && !SIN_SILUETA.has(o.tipo))
               .map((o) => siluetaGris(o, M))
               .join('');
             // Nombre de cada acceso y de cada camión.
@@ -2318,7 +2320,7 @@ export function hojaLogistica(escena, comp, op) {
 
 function columnaLogistica(escena, ctx) {
   const objs = objetosDe(escena);
-  const regiones = regionesColumna(ctx);
+  const regiones = regionesColumna(ctx, 75);
   const ancho = Math.min(...regiones.map((r) => r.w));
   const filas = [];
   filas.push(filaTitulo('Carga y descarga', 3.2));

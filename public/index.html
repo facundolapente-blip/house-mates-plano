@@ -55,6 +55,7 @@
       <button role="tab" data-vista="planta" aria-selected="false" title="Planta (2)" data-icono="planta"><span>Planta</span></button>
       <button role="tab" data-vista="plano" aria-selected="false" title="Plano para imprimir (3)" data-icono="hoja"><span>Plano</span></button>
       <button role="tab" data-vista="materiales" aria-selected="false" title="Listado de materiales (4)" data-icono="lista"><span>Materiales</span></button>
+      <button role="tab" data-vista="produccion" aria-selected="false" title="Producción: cronograma, proveedores, staff y presupuesto (5)" data-icono="produccion"><span>Producción</span></button>
     </nav>
 
     <div class="barra-der">
@@ -170,6 +171,7 @@
     <label class="estado-control"><input type="checkbox" id="ver-transparentar"> Paredes transparentes</label>
     <label class="estado-control"><input type="checkbox" id="ver-ao"> Sombras de contacto</label>
     <label class="estado-control"><input type="checkbox" id="ver-fondo"> Fondo</label>
+    <label class="estado-control"><input type="checkbox" id="ver-fotos"> Fotos</label>
     <span class="estado-espacio"></span>
     <span id="info-sel" class="info-sel"></span>
     <button id="btn-deshacer" class="boton-icono" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" data-icono="deshacer" disabled></button>
@@ -228,7 +230,7 @@
         <dt>M</dt><dd>Medir</dd>
         <dt>C</dt><dd>Cota fija</dd>
         <dt>Z</dt><dd>Dibujar zona</dd>
-        <dt>1 2 3 4</dt><dd>3D, planta, plano, materiales</dd>
+        <dt>1 2 3 4 5</dt><dd>3D, planta, plano, materiales, producción</dd>
         <dt>F</dt><dd>Encuadrar todo o la selección</dd>
         <dt>N</dt><dd>Modo noche</dd>
       </dl>
@@ -318,6 +320,27 @@
   </dialog>
 
   <dialog id="dlg-foto" class="dlg-foto" aria-label="Foto ampliada"><img alt=""></dialog>
+
+  <dialog id="dlg-mapa" aria-labelledby="dlg-mapa-titulo" class="dlg-ancho dlg-mapa">
+    <div class="dlg-mapa-cuerpo">
+      <div class="dlg-mapa-opciones">
+        <h2 id="dlg-mapa-titulo">Mapa para el público</h2>
+        <p class="ayuda">Un mapa simple para que la gente sepa dónde está cada cosa: barra, baños, salidas, estacionamiento. Sin medidas ni datos técnicos.</p>
+        <label class="campo"><span>Formato</span><select id="mapa-formato"></select></label>
+        <label class="campo"><span>Colores</span><select id="mapa-tema"><option value="oscuro">Oscuro</option><option value="claro">Claro</option></select></label>
+        <label class="campo"><span>Orientación del predio</span><select id="mapa-orientacion"><option value="ajustar">La que mejor entre</option><option value="norte">El norte arriba</option><option value="escena">Como en la planta</option></select></label>
+        <label class="campo"><span>Título</span><input id="mapa-titulo" maxlength="60" autocomplete="off"></label>
+        <label class="campo"><span>Subtítulo</span><input id="mapa-subtitulo" maxlength="80" autocomplete="off" placeholder="Fecha, horario o dirección"></label>
+        <p id="mapa-avisos" class="ayuda"></p>
+        <div class="fila-botones apilados">
+          <button type="button" id="mapa-png" class="boton primario">Descargar imagen</button>
+          <button type="button" id="mapa-svg" class="boton">Descargar SVG (para editar)</button>
+          <button type="button" id="dlg-mapa-cerrar" class="boton">Listo</button>
+        </div>
+      </div>
+      <div id="mapa-vista" class="dlg-mapa-vista" aria-label="Vista previa del mapa"></div>
+    </div>
+  </dialog>
 
   <div class="aviso-fijo aviso-sin-servidor">
     <h2>La herramienta tiene que abrirse con el servidor</h2>

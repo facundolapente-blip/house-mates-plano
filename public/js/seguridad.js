@@ -865,7 +865,9 @@ export function analizarServicios(escena, salidas) {
   const de = (tipo) => objs.filter((o) => o.tipo === tipo);
   const personas = Math.max(0, Math.round(Number(salidas.total?.personas) || 0));
   const res = [];
-  const conteo = (tiene, necesita) => (necesita > 0 ? `${ent(tiene)} de ${ent(necesita)}` : ent(tiene));
+  // "3 de 7" cuando falta; "4 (alcanza con 3)" cuando sobra.
+  const conteo = (tiene, necesita) => (necesita <= 0 ? ent(tiene) : tiene > necesita ? `${ent(tiene)} (alcanza con ${ent(necesita)})` : `${ent(tiene)} de ${ent(necesita)}`);
+  const conteoM = (tiene, necesita) => (tiene > necesita + 1e-6 ? `${metros(tiene)} m (alcanza con ${metros(necesita)} m)` : `${metros(tiene)} de ${metros(necesita)} m`);
 
   // Salidas
   {
@@ -880,7 +882,7 @@ export function analizarServicios(escena, salidas) {
       else detalle = `${s.faltanSalidas === 1 ? 'Falta una salida más' : `Faltan ${s.faltanSalidas} salidas más`}${donde}: hacen falta al menos ${sg.salidasMinimas}.`;
       if (malos.length > 1) detalle += ` También hay que revisar ${malos.length - 1} ${pl(malos.length - 1, 'sector más', 'sectores más')}.`;
     }
-    res.push({ clave: 'salidas', nombre: 'Salidas', tiene: t.anchoDisponible, necesita: t.anchoNecesario, unidad: 'm', ok: t.ok, nivel: t.ok ? 'ok' : 'error', dato: `${metros(t.anchoDisponible)} de ${metros(t.anchoNecesario)} m`, detalle });
+    res.push({ clave: 'salidas', nombre: 'Salidas', tiene: t.anchoDisponible, necesita: t.anchoNecesario, unidad: 'm', ok: t.ok, nivel: t.ok ? 'ok' : 'error', dato: conteoM(t.anchoDisponible, t.anchoNecesario), detalle });
   }
 
   // Matafuegos: uno cada m2PorMatafuego y todo el lugar a menos de radioMatafuego de alguno.
@@ -922,7 +924,7 @@ export function analizarServicios(escena, salidas) {
     const falta = Math.max(0, necesita - tiene);
     let detalle = falta > 1e-6 ? `Faltan ${metros(falta)} m de barra para ${gente(personas)} (1 m cada ${ent(sv.personasPorMetroBarra)}).` : `Alcanza para ${gente(personas)}.`;
     if (trucks) detalle += ` Los food trucks cuentan ${ent(METROS_FOODTRUCK)} m cada uno.`;
-    res.push({ clave: 'barra', nombre: 'Barra', tiene, necesita, unidad: 'm', ok: falta <= 1e-6, nivel: nivelDe(tiene, necesita, false), dato: `${metros(tiene)} de ${metros(necesita)} m`, detalle });
+    res.push({ clave: 'barra', nombre: 'Barra', tiene, necesita, unidad: 'm', ok: falta <= 1e-6, nivel: nivelDe(tiene, necesita, false), dato: conteoM(tiene, necesita), detalle });
   }
 
   // Agua
@@ -1027,11 +1029,13 @@ export function htmlSeguridad(escena, { salidas, servicios, mapa } = {}) {
     const lineas = [itSal.detalle];
     if (salidas.sectores.length > 1) {
       for (const s of salidas.sectores) {
-        lineas.push(`${s.nombre}: ${gente(s.personas)}, ${metros(s.anchoDisponible)} de ${metros(s.anchoNecesario)} m en ${s.salidas.length} ${pl(s.salidas.length, 'salida', 'salidas')}${s.ok ? '' : ' (falta)'}.`);
+        const donde = s.salidas.length ? `en ${s.salidas.length} ${pl(s.salidas.length, 'salida', 'salidas')}` : 'sin salidas';
+        lineas.push(`${s.nombre}: ${gente(s.personas)}, ${metros(s.anchoDisponible)} de ${metros(s.anchoNecesario)} m ${donde}${s.ok ? '' : ' (falta)'}.`);
       }
     } else if (salidas.sectores[0]) {
       const s = salidas.sectores[0];
-      lineas.push(`${s.salidas.length} ${pl(s.salidas.length, 'salida', 'salidas')}; hacen falta ${s.unidadesNecesarias} unidades de ${metros(salidas.opciones.anchoUnidad)} m.`);
+      const cuantas = s.salidas.length ? `${s.salidas.length} ${pl(s.salidas.length, 'salida', 'salidas')}` : 'Sin salidas';
+      lineas.push(`${cuantas}; hacen falta ${s.unidadesNecesarias} unidades de ${metros(salidas.opciones.anchoUnidad)} m.`);
     }
     partes.push(tarjeta(itSal.nivel, itSal.nombre, itSal.dato, lineas));
   }

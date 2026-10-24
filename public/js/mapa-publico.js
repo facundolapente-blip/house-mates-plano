@@ -11,6 +11,7 @@ import { plazasEstacionamiento, lineaLocal, moduloVallado } from './predio.js';
 import { tieneGeo, escenaAGeo, enlaceComoLlegar } from './geo.js';
 import { rutaIcono } from './iconos.js';
 import { esc } from './formato.js';
+import { qrSVG as qrDeLaApp } from './qr.js';
 
 export const FORMATOS = {
   historia: { nombre: 'Historia de Instagram', ancho: 1080, alto: 1920, unidad: 'px' },
@@ -92,9 +93,9 @@ const CATEGORIA_DE_TIPO = {
 
 // Zonas: las que se rotulan y con qué color. Las de trabajo no salen en el mapa del público.
 const USOS_ZONA = {
-  pista: { nombre: 'Pista', color: 'violeta', leyenda: true },
-  vip: { nombre: 'VIP', color: 'calido', leyenda: true },
-  fumadores: { nombre: 'Fumadores', color: 'neutro', leyenda: true },
+  pista: { nombre: 'Pista', color: 'violeta' },
+  vip: { nombre: 'VIP', color: 'calido' },
+  fumadores: { nombre: 'Fumadores', color: 'neutro' },
   barra: { nombre: '', color: 'calido' },
   general: { nombre: '', color: 'neutro' },
 };
@@ -742,7 +743,8 @@ let serie = 0;
 /**
  * Mapa para el público en SVG.
  * opciones: formato (clave de FORMATOS), tema ('oscuro' | 'claro'), titulo, subtitulo,
- *   orientacion ('ajustar' | 'norte' | 'escena'), qrSVG((texto, { x, y, lado, color, fondo }) => svg),
+ *   orientacion ('ajustar' | 'norte' | 'escena'), qrSVG((texto, { x, y, lado, color, fondo }) => svg; por
+ *   defecto el de qr.js), qr (false para no poner el QR "Cómo llegar", que sale solo si la escena tiene geo),
  *   fuentes ({ regular, semibold, bold } en data URL de woff2), ocultar (['camino:proveedores', 'tipo:tacho', ...]),
  *   destino ([x, y] de la escena para el QR "Cómo llegar"; por defecto, el acceso o el punto de geo).
  * Lo que no venga en opciones sale de escena.mapaPublico.
@@ -782,13 +784,14 @@ export function generarMapaPublico(escena, opciones = {}) {
   // QR "Cómo llegar": al acceso (el que se llame entrada, si hay) o al punto ubicado de la escena. Va
   // arriba a la derecha, al lado de la marca y del título.
   let qr = null;
-  if (typeof conf.qrSVG === 'function' && tieneGeo(e)) {
+  const dibujarQR = typeof conf.qrSVG === 'function' ? conf.qrSVG : (texto, op) => qrDeLaApp(texto, { ...op, margen: 2 });
+  if (conf.qr !== false && tieneGeo(e)) {
     const accesos = reunido.pines.filter((p) => p.categoria === 'salida' || p.categoria === 'acceso');
     const entrada = accesos.find((p) => /entrada|ingreso|principal/i.test(p.nombre)) || accesos[0];
     const destino = esPunto(conf.destino) ? conf.destino.map(Number) : entrada ? entrada.pos : [Number(e.geo.x) || 0, Number(e.geo.y) || 0];
     const lado = (clave === 'cuadrado' ? 136 : clave === 'afiche' ? 190 : 164) * t;
     qr = { enlace: enlaceComoLlegar(escenaAGeo(e, destino)), lado, w: lado + 28 * t, h: 34 * t + lado + 28 * t + 30 * t };
-  } else if (typeof conf.qrSVG === 'function') avisos.push('Para sumar el QR "Cómo llegar", ubicá la escena en el mapa (latitud y longitud).');
+  } else if (conf.qr !== false) avisos.push('Para sumar el QR "Cómo llegar", ubicá la escena en el mapa (latitud y longitud).');
 
   /* ---------------- encabezado: marca, título, fecha y lugar */
   let y = D.arriba;
@@ -836,7 +839,7 @@ export function generarMapaPublico(escena, opciones = {}) {
     const py = qy + 34 * t;
     partes.push(`<rect x="${n1(qx)}" y="${n1(py)}" width="${n1(qr.w)}" height="${n1(qr.w)}" rx="${n1(18 * t)}" fill="#FFFFFF"${T === TEMAS.claro ? ` stroke="${T.borde}" stroke-width="${n1(2 * t)}"` : ''}/>`);
     try {
-      const s = conf.qrSVG(qr.enlace, { x: qx + 14 * t, y: py + 14 * t, lado: qr.lado, color: COLORES_MARCA.negro, fondo: '#FFFFFF' });
+      const s = dibujarQR(qr.enlace, { x: qx + 14 * t, y: py + 14 * t, lado: qr.lado, color: COLORES_MARCA.negro, fondo: '#FFFFFF' });
       if (typeof s === 'string' && s) partes.push(`<g>${s}</g>`);
       else avisos.push('El QR no se pudo dibujar.');
     } catch {
@@ -1043,55 +1046,65 @@ export function generarMapaPublico(escena, opciones = {}) {
   }
 
   /* ---------------- rótulos */
+  // Primero lo más importante (escenario, salidas, primeros auxilios, punto de encuentro), después las
+  // zonas, después los demás servicios y al final los nombres de las áreas y los carteles del piso. Lo
+  // que no entra sin pisar otra cosa no se pone (el pin queda y la leyenda lo explica).
   const rotulos = [];
-  const tr = 23 * t;
-  for (const q of ubicados) {
+  const tr = 23 * t * (0.88 + 0.12 * f);
+  const cruza = (a, o) => a.x0 < o.x1 && a.x1 > o.x0 && a.y0 < o.y1 && a.y1 > o.y0;
+  const enDosLineas = (s, tam, peso) => {
+    const palabras = String(s).split(' ').filter(Boolean);
+    if (palabras.length < 2) return null;
+    let mejor = null;
+    for (let i = 1; i < palabras.length; i++) {
+      const l = [palabras.slice(0, i).join(' '), palabras.slice(i).join(' ')];
+      const w = Math.max(...l.map((x) => anchoTexto(x, tam, peso)));
+      if (!mejor || w < mejor.w) mejor = { l, w };
+    }
+    return mejor.l;
+  };
+  const rotularPin = (q) => {
     const texto = q.p.rotulo;
-    if (!texto) continue;
+    if (!texto) return;
     const sub = q.p.sub || '';
     const ts = tr * 0.78;
     const peso = CATEGORIAS_MAPA[q.p.categoria]?.grande ? 700 : 600;
-    const w = Math.max(anchoTexto(texto, tr, peso), sub ? anchoTexto(sub, ts, 500) : 0);
-    const h = tr * 1.2 + (sub ? tr * 0.95 : 0);
+    const variantes = [[texto]];
+    const dos = !sub && enDosLineas(texto, tr, peso);
+    if (dos) variantes.push(dos);
     const c = q.c;
     const re = Math.max(c.x1 - q.x, q.x - c.x0, c.y1 - q.y, q.y - c.y0);
-    let puesto = null;
     for (const extra of [0, R * 0.9, R * 1.8]) {
       const g = 9 * t + extra;
-      const lugares = [
-        [q.x + re + g, q.y - h / 2, 'start'],
-        [q.x - re - g - w, q.y - h / 2, 'end'],
-        [q.x - w / 2, q.y + re + g * 0.6, 'middle'],
-        [q.x - w / 2, q.y - re - g * 0.6 - h, 'middle'],
-        [q.x + re * 0.7 + g, q.y + re * 0.35, 'start'],
-        [q.x + re * 0.7 + g, q.y - re * 0.35 - h, 'start'],
-        [q.x - re * 0.7 - g - w, q.y + re * 0.35, 'end'],
-        [q.x - re * 0.7 - g - w, q.y - re * 0.35 - h, 'end'],
-      ];
-      for (const [bx, by, ancla] of lugares) {
-        const cj = { x0: bx, y0: by, x1: bx + w, y1: by + h };
-        if (dentro(cj) && !choca(cj)) {
-          puesto = { cj, ancla };
-          break;
+      for (const lineas of variantes) {
+        const w = Math.max(...lineas.map((l) => anchoTexto(l, tr, peso)), sub ? anchoTexto(sub, ts, 500) : 0);
+        const h = tr * (1.2 + 1.15 * (lineas.length - 1)) + (sub ? tr * 0.95 : 0);
+        const lugares = [
+          [q.x + re + g, q.y - h / 2, 'start'],
+          [q.x - re - g - w, q.y - h / 2, 'end'],
+          [q.x - w / 2, q.y + re + g * 0.6, 'middle'],
+          [q.x - w / 2, q.y - re - g * 0.6 - h, 'middle'],
+          [q.x + re * 0.7 + g, q.y + re * 0.35, 'start'],
+          [q.x + re * 0.7 + g, q.y - re * 0.35 - h, 'start'],
+          [q.x - re * 0.7 - g - w, q.y + re * 0.35, 'end'],
+          [q.x - re * 0.7 - g - w, q.y - re * 0.35 - h, 'end'],
+        ];
+        for (const [bx, by, ancla] of lugares) {
+          const cj = { x0: bx, y0: by, x1: bx + w, y1: by + h };
+          if (!dentro(cj) || choca(cj)) continue;
+          ocupado.push(cj);
+          const xt = ancla === 'start' ? cj.x0 : ancla === 'end' ? cj.x1 : (cj.x0 + cj.x1) / 2;
+          lineas.forEach((l, i) => rotulos.push(txt(xt, by + tr * (0.92 + 1.15 * i), l, { t: tr, peso, color: T.texto, ancla, halo: T.tarjeta })));
+          if (sub) rotulos.push(txt(xt, by + tr * (1.92 + 1.15 * (lineas.length - 1)), sub, { t: ts, peso: 500, color: T.suave, ancla, halo: T.tarjeta }));
+          return;
         }
       }
-      if (puesto) break;
     }
-    if (!puesto) {
-      avisos.push(`No entró el rótulo "${texto}": queda solo en la leyenda.`);
-      continue;
-    }
-    ocupado.push(puesto.cj);
-    const { cj, ancla } = puesto;
-    const xt = ancla === 'start' ? cj.x0 : ancla === 'end' ? cj.x1 : (cj.x0 + cj.x1) / 2;
-    rotulos.push(txt(xt, cj.y0 + tr * 0.92, texto, { t: tr, peso, color: T.texto, ancla, halo: T.tarjeta }));
-    if (sub) rotulos.push(txt(xt, cj.y0 + tr * 1.92, sub, { t: ts, peso: 500, color: T.suave, ancla, halo: T.tarjeta }));
-  }
+    avisos.push(`No entró el rótulo "${texto}": queda solo en la leyenda.`);
+  };
 
-  // Zonas (más importantes), áreas y carteles del piso: si no entran, no se ponen.
-  // "lugares": puntos del lienzo donde puede ir, en orden de preferencia. "evitar": cajas que no tiene
-  // que tocar además de lo ya ubicado (los nombres de las áreas no van encima de una zona).
-  const cruza = (a, o) => a.x0 < o.x1 && a.x1 > o.x0 && a.y0 < o.y1 && a.y1 > o.y0;
+  // Rótulos sin pin. "lugares": puntos del lienzo donde puede ir, en orden de preferencia. "evitar": cajas
+  // que no tiene que tocar además de lo ya ubicado (los nombres de las áreas no van encima de una zona).
   const rotuloSuelto = (s, lugares, { tam, peso, color, ls = 0, op = 1, mayus = false, evitar = [] }) => {
     const texto = mayus ? String(s).toLocaleUpperCase('es-AR') : String(s);
     const w = anchoTexto(texto, tam, peso, ls);
@@ -1113,22 +1126,30 @@ export function generarMapaPublico(escena, opciones = {}) {
     const c = cajaDe(P);
     return { x0: c.minX, y0: c.minY, x1: c.maxX, y1: c.maxY };
   };
-  const zonasEnPantalla = reunido.formas.filter((x) => x.clase === 'zona' || x.clase === 'estacionamiento').map((f) => cajaPantalla(f.forma.map(M)));
-  for (const f of reunido.formas.filter((x) => x.clase === 'zona' && x.nombre)) {
-    const tz = 21 * t;
-    if (!rotuloSuelto(f.nombre, [M(f.pos)], { tam: tz, peso: 700, color: colorLinea(f.color, T), ls: tz * 0.12, mayus: true })) avisos.push(`No entró el rótulo de la zona "${f.nombre}".`);
-  }
-  for (const f of reunido.formas.filter((x) => x.clase === 'camino' && x.nombre)) {
-    rotuloSuelto(f.nombre, [M(f.pos)], { tam: 18 * t, peso: 600, color: colorLinea(f.color, T) });
-  }
-  for (const f of reunido.formas.filter((x) => x.clase === 'area' && x.nombre)) {
-    const ta = 18 * t;
-    const P = f.forma.map(M);
+  // Puntos de adentro de una forma: el centro y, si está ocupado, arriba, abajo y a los costados.
+  const lugaresAdentro = (forma, centro) => {
+    const P = forma.map(M);
     const c = cajaPantalla(P);
     const w = c.x1 - c.x0;
     const h = c.y1 - c.y0;
-    const lugares = [M(f.pos), [(c.x0 + c.x1) / 2, c.y0 + h * 0.1], [(c.x0 + c.x1) / 2, c.y1 - h * 0.1], [c.x0 + w * 0.3, (c.y0 + c.y1) / 2], [c.x1 - w * 0.3, (c.y0 + c.y1) / 2]].filter(([x, yy]) => puntoEnPoligono(x, yy, P));
-    rotuloSuelto(f.nombre, lugares, { tam: ta, peso: 600, color: T.suave, ls: ta * 0.14, mayus: true, op: 0.9, evitar: zonasEnPantalla });
+    const medio = [(c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2];
+    return [M(centro), [medio[0], c.y0 + h * 0.14], [medio[0], c.y1 - h * 0.14], [c.x0 + w * 0.3, medio[1]], [c.x1 - w * 0.3, medio[1]]].filter(([x, yy]) => puntoEnPoligono(x, yy, P));
+  };
+
+  ubicados.filter((q) => q.p.prioridad >= 92).forEach(rotularPin);
+  for (const f2 of reunido.formas.filter((x) => x.clase === 'zona' && x.nombre)) {
+    const tz = 21 * t;
+    const lugares = lugaresAdentro(f2.forma, f2.pos);
+    if (!rotuloSuelto(f2.nombre, lugares.length ? lugares : [M(f2.pos)], { tam: tz, peso: 700, color: colorLinea(f2.color, T), ls: tz * 0.12, mayus: true })) avisos.push(`No entró el rótulo de la zona "${f2.nombre}".`);
+  }
+  ubicados.filter((q) => q.p.prioridad < 92).forEach(rotularPin);
+  for (const f2 of reunido.formas.filter((x) => x.clase === 'camino' && x.nombre)) {
+    rotuloSuelto(f2.nombre, [M(f2.pos)], { tam: 18 * t, peso: 600, color: colorLinea(f2.color, T) });
+  }
+  const zonasEnPantalla = reunido.formas.filter((x) => x.clase === 'zona' || x.clase === 'estacionamiento').map((f2) => cajaPantalla(f2.forma.map(M)));
+  for (const f2 of reunido.formas.filter((x) => x.clase === 'area' && x.nombre)) {
+    const ta = 18 * t;
+    rotuloSuelto(f2.nombre, lugaresAdentro(f2.forma, f2.pos), { tam: ta, peso: 600, color: T.suave, ls: ta * 0.14, mayus: true, op: 0.9, evitar: zonasEnPantalla });
   }
   for (const tx of reunido.textos) rotuloSuelto(tx.nombre, [M(tx.pos)], { tam: 17 * t, peso: 500, color: T.suave });
 
@@ -1164,7 +1185,7 @@ export function generarMapaPublico(escena, opciones = {}) {
     ...fondo,
     `<g clip-path="url(#${sx}-recorte)">${mapa.join('')}</g>`,
     ...lineasGuia,
-    ...ubicados.map((q) => svgPin(q.p, q.x, q.y, q.r, T)),
+    ...ubicados.map((q) => `<g class="pin" data-categoria="${esc(q.p.categoria)}">${svgPin(q.p, q.x, q.y, q.r, T)}</g>`),
     ...rotulos,
     svgRosa,
     ...partes,

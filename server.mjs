@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { leerConfig } from './servidor/config.mjs';
 import { crearApagado, manejarApagar } from './servidor/apagado.mjs';
 import { crearHistorial } from './servidor/historial.mjs';
+import { crearChecklist } from './servidor/checklist.mjs';
 
 const RAIZ = path.dirname(fileURLToPath(import.meta.url));
 const PUBLICO = path.join(RAIZ, 'public');
@@ -262,7 +263,19 @@ function permitido(req) {
   }
 }
 
+// Checklist del armado (celular): GET y PATCH /api/checklist/:slug, ver servidor/checklist.mjs.
+const checklist = crearChecklist({ ESCENAS, SLUG, json, leerCuerpo, emitir });
+
+// Direcciones de esta compu en la red local (para abrir el checklist desde el celular).
+function direccionesRed() {
+  return Object.values(os.networkInterfaces())
+    .flat()
+    .filter((i) => i && i.family === 'IPv4' && !i.internal)
+    .map((i) => `http://${i.address}:${PUERTO}`);
+}
+
 async function api(req, res, [recurso, slug, ...resto], url) {
+  if (recurso === 'red' && !slug) return json(res, 200, { red: RED, direcciones: RED ? direccionesRed() : [] });
   if (recurso === 'eventos') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
     res.write('retry: 2000\n\n');
@@ -419,6 +432,8 @@ async function api(req, res, [recurso, slug, ...resto], url) {
       return json(res, 200, { nombre, url: `/fotos/${slug}/${encodeURIComponent(nombre)}` });
     }
   }
+
+  if (await checklist.manejar(req, res, [recurso, slug, ...resto])) return;
 
   return json(res, 404, { error: 'Ruta de API desconocida' });
 }

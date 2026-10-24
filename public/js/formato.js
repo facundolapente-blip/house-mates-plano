@@ -28,6 +28,26 @@ export function leerNumero(texto) {
   return Number.isFinite(n) ? n : null;
 }
 
+// Plata: entiende "80.000", "80000", "1.250,50", "$ 80.000", "80 mil", "1,5 M" y "USD 1,200". Con punto y
+// tres cifras detrás es separador de miles (en la Argentina nadie escribe 80.000 queriendo decir 80).
+export function leerMonto(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  let s = String(v ?? '').toLowerCase().replace(/\s+/g, '').replace(/^(-?)(us\$|u\$s|usd|ars|\$)/, '$1').replace(/\$/g, '');
+  if (!s) return null;
+  let mult = 1;
+  const suf = /^(.*?)(millones|millón|millon|mil|k|m)$/.exec(s);
+  if (suf) {
+    s = suf[1];
+    mult = suf[2] === 'k' || suf[2] === 'mil' ? 1000 : 1e6;
+  }
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+  else if (/^-?\d+(,\d+)?$/.test(s)) s = s.replace(',', '.');
+  else if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replace(/,/g, '');
+  else if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
+  const n = parseFloat(s) * mult;
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
+
 export const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -164,7 +184,7 @@ export function normalizarEscena(e) {
     // Sin "elev" el objeto está apoyado en el piso. La altura típica del tipo solo se usa al agregarlo.
     for (const k of OPCIONALES) {
       if (o[k] === undefined) continue;
-      const n = numero(o[k]);
+      const n = k === 'costo' ? leerMonto(o[k]) : numero(o[k]);
       if (n === null) delete o[k];
       else o[k] = n;
     }
@@ -264,7 +284,7 @@ function normalizarDatosEscena(e) {
     const extras = Array.isArray(p.extras) ? p.extras.filter((x) => x && typeof x === 'object') : [];
     for (const x of extras) {
       if (!x.id) x.id = nuevoId();
-      x.monto = numero(x.monto) ?? 0;
+      x.monto = leerMonto(x.monto) ?? 0;
     }
     e.presupuesto = { ...p, extras };
   }

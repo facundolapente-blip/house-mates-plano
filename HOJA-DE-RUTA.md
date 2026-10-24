@@ -4,6 +4,10 @@ Listado pensado desde la producción de un evento: qué hace falta para planific
 sorpresas, pasar la habilitación y que el público sepa dónde está cada cosa. Están numeradas para que me digas cuáles
 querés ("la 1, la 4 y la 12").
 
+> **Estado al 23/10/2026: las 38 están hechas.** Algunas con matices: el QR de cómo llegar (7) aparece cuando la
+> escena está ubicada en el mapa, y el checklist en el celular (26) necesita abrir la herramienta con `abrir-red.bat`.
+> Lo que sigue es probarlas en un evento real y pulir lo que haga falta.
+
 **Tamaño**: chico = un rato; medio = una sesión de trabajo; grande = varias sesiones.
 **★** = las que recomiendo para el predio de diciembre.
 

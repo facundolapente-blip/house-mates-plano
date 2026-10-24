@@ -4,7 +4,7 @@ Herramienta de maquetación para el armado de los eventos House Mates: el lugar 
 imprimir, listado de materiales y análisis para planificar (salidas, sonido, energía, sol, terreno). Funciona en la
 computadora, sin internet.
 
-> **Estado: en desarrollo.** Esta es una versión de avance. Abajo está lo que ya anda y lo que falta.
+> **Estado: en desarrollo.** Ya están todas las funciones de la hoja de ruta; ahora toca usarlo en eventos reales y pulir.
 
 **Probala online: [house-mates-plano.vercel.app](https://house-mates-plano.vercel.app)**. Es una versión de muestra:
 se puede recorrer y probar todo, pero los cambios no se guardan (la herramienta completa se usa en la compu).
@@ -25,19 +25,22 @@ se puede recorrer y probar todo, pero los cambios no se guardan (la herramienta 
   (DXF), Google Earth (KML) y un **visor de un solo archivo** para mandar por WhatsApp.
 - **Análisis:** cobertura de sonido y ruido a los vecinos, potencia por tablero y metros de cable, peso colgado en
   cada truss, sol y sombra a cada hora, terreno con pendientes y dónde se junta el agua.
+- **Seguridad:** cuánta gente entra, ancho de salidas, distancia caminando a la salida más cercana (pintada en el
+  piso), matafuegos, baños, barra, agua y primeros auxilios, más un plano de emergencia para imprimir.
+- **Producción:** cronograma de armado y desarme con línea de tiempo (y un borrador que se arma solo), proveedores
+  con horario, acceso y WhatsApp, staff, presupuesto y comparación entre dos variantes de distribución.
+- **Mapa para el público:** historia de Instagram, posteo o afiche A3 con la identidad de House Mates y QR de cómo llegar.
+- **Checklist del armado en el celular:** el equipo marca lo que llegó y lo que está armado escaneando un QR.
+- **Vistas de frente** con todas las alturas (la cabina, por ejemplo) y **fotos ubicadas en el mapa**.
 - **Seguridad de los datos:** versiones anteriores para volver atrás, historial con git y copia en la nube (OneDrive).
 
-## En camino
-
-Mapa para el público (historia, posteo y afiche con QR), seguridad y salidas de emergencia, vista de producción
-(cronograma, presupuesto, proveedores, staff, comparar variantes), checklist de armado en el celular, vistas de frente
-con alturas y fotos ubicadas en el mapa. El detalle está en [HOJA-DE-RUTA.md](HOJA-DE-RUTA.md).
+El detalle de cada función está en [HOJA-DE-RUTA.md](HOJA-DE-RUTA.md).
 
 ## Cómo abrirlo
 
 1. Instalar [Node.js](https://nodejs.org) (una sola vez).
 2. Descargar este repositorio (botón verde **Code**, **Download ZIP**) y descomprimirlo.
-3. Doble clic en `abrir.bat`. Se abre en el navegador.
+3. Doble clic en `abrir-oculto.vbs` (o `abrir.bat`). Se abre en el navegador.
 
 Más detalle en [INSTRUCCIONES.md](INSTRUCCIONES.md). Para quien programa: [CLAUDE.md](CLAUDE.md) y
 [docs/esquema-v2.md](docs/esquema-v2.md).

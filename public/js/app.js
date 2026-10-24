@@ -11,7 +11,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TIPOS, CATEGORIAS, crearObjeto3D, matBorde, catDe, defDe, troncoDe } from './tipos.js';
 import { construirArea } from './lugar.js';
-import { formatearJSON, normalizarEscena, nuevoId, slugificar, r3, fm, leerNumero, esc, escenaVacia, numero } from './formato.js';
+import { formatearJSON, normalizarEscena, nuevoId, slugificar, r3, fm, leerNumero, leerMonto, esc, escenaVacia, numero } from './formato.js';
 import { mapaSonido, colorearSonido, htmlSonido, hojaSonido, BANDAS, ESTILOS_SONIDO } from './sonido.js';
 import { analizarElectrico, htmlElectrico, hojaElectrica, conectarMasCercano, derivadosElectricos, CSS_ELECTRICO, esFuente } from './electrico.js';
 import { analizarCargas, htmlCargas, CSS_CARGAS, COLGABLES } from './cargas.js';
@@ -20,6 +20,12 @@ import { mallaTerreno, curvasDeNivel, curvasSVG, htmlTerreno, textoDesnivel, alt
 import { exportarKML } from './kml.js';
 import { exportarDXF, leerDXF } from './dxf.js';
 import { crearVisorHTML, nombreArchivoVisor, materialesHTML } from './compartir.js';
+import { analizarSalidas, analizarServicios, htmlSeguridad, mapaDistancias, colorearDistancias, hojaEmergencia, opcionesSeguridad, opcionesServicios, CSS_SEGURIDAD } from './seguridad.js';
+import { hojasElevaciones, elevacionSVG, nuevaVista, vistaPorDefecto } from './elevacion.js';
+import { generarMapaPublico, FORMATOS as FORMATOS_MAPA, cargarFuentes, mapaAImagen } from './mapa-publico.js';
+import { htmlProduccion, aplicarEdicion, aplicarAccion, hojasProveedores, hojaLogistica, htmlResumenEstado, fechaHora as fechaHoraProd } from './produccion.js';
+import { qrSVG } from './qr.js';
+import { itemsChecklist, progreso } from './checklist-datos.js';
 import {
   esquinas,
   cajaDe,
@@ -77,7 +83,7 @@ const estado = {
   noche: false,
   paso: pref.paso || 0.1,
   tema: pref.tema === 'claro' ? 'claro' : 'oscuro',
-  ver: { nombres: false, cotas: true, grilla: true, transparentar: true, copas: true, ao: true, fondo: true, ...(pref.ver || {}) },
+  ver: { nombres: false, cotas: true, grilla: true, transparentar: true, copas: true, ao: true, fondo: true, fotos: true, ...(pref.ver || {}) },
   ocultas: new Set(pref.ocultas || []),
   bloqueadas: new Set(pref.bloqueadas || []),
   deshacer: [],
@@ -91,6 +97,9 @@ const estado = {
   analisis: null,
   // Sol: día ('AAAA-MM-DD') y minuto del día elegidos, y si la luz del 3D va donde está el sol de verdad.
   sol: { dia: null, minuto: 17 * 60, real: false },
+  // Producción: pestaña elegida y escena con la que se compara.
+  pestanaProd: 'cronograma',
+  comparacion: null,
 };
 let listaEscenas = [];
 // Versión de muestra: la app publicada en internet, sin el servidor de la compu. Las escenas se leen de
@@ -128,8 +137,12 @@ const enVista3D = () => estado.vista === '3d' || estado.vista === 'planta';
 
 const visor = $('#visor');
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+// Resolución en reposo; mientras se mueve la vista se baja a 1 para que vaya fluido (ver "dibujo a pedido").
+const RESOLUCION = Math.min(window.devicePixelRatio, 1.75);
+renderer.setPixelRatio(RESOLUCION);
 renderer.shadowMap.enabled = true;
+// Las sombras se recalculan solo cuando cambia la escena, no cada vez que se mueve la cámara.
+renderer.shadowMap.autoUpdate = false;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.NeutralToneMapping;
 visor.prepend(renderer.domElement);
@@ -173,7 +186,54 @@ ctrlO.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
 ctrlO.enabled = false;
 
 const ctrlR = new PointerLockControls(camR, renderer.domElement);
-Object.assign(window.plano, { camP, camO, camR, ctrlP, ctrlO, mundo });
+Object.assign(window.plano, { camP, camO, camR, ctrlP, ctrlO, mundo, renderer });
+
+/* ------------------------------------------------------------------ dibujo a pedido */
+
+// La vista se dibuja solo cuando algo cambia (la cámara, un objeto, la selección, una guía). Quieta, no gasta
+// nada. Mientras se mueve la cámara se bajan la resolución y las sombras de contacto; al soltar, se dibuja una
+// vez en calidad completa.
+let cuadrosPendientes = 2;
+let sombrasPendientes = true;
+let moviendo = false;
+let quietoDesde = 0;
+const pedirRender = (n = 1) => {
+  cuadrosPendientes = Math.max(cuadrosPendientes, n);
+};
+// Cambió algo de la escena (no solo la cámara): también se recalculan las sombras del sol.
+const cambioEscena = () => {
+  sombrasPendientes = true;
+  pedirRender(2);
+};
+
+function empezarMovimiento() {
+  quietoDesde = performance.now();
+  if (moviendo) return;
+  moviendo = true;
+  if (RESOLUCION > 1) {
+    renderer.setPixelRatio(1);
+    composer.setPixelRatio(1);
+  }
+}
+
+function terminarMovimiento() {
+  moviendo = false;
+  if (RESOLUCION > 1) {
+    renderer.setPixelRatio(RESOLUCION);
+    composer.setPixelRatio(RESOLUCION);
+  }
+  pedirRender(1);
+}
+
+for (const c of [ctrlP, ctrlO]) c.addEventListener('change', () => {
+  pedirRender();
+  empezarMovimiento();
+});
+// Red de seguridad: casi todo lo que cambia la escena empieza con un clic, una tecla o un campo del panel.
+for (const tipo of ['pointerdown', 'pointerup', 'keydown', 'keyup', 'wheel', 'input', 'change', 'click', 'drop', 'paste']) {
+  window.addEventListener(tipo, cambioEscena, { capture: true, passive: true });
+}
+window.addEventListener('pointermove', (e) => e.buttons && cambioEscena(), { capture: true, passive: true });
 
 let panTemporal = false;
 function botonesRaton() {
@@ -228,7 +288,8 @@ const guiaG = new THREE.Group();
 const fondoG = new THREE.Group();
 const analisisG = new THREE.Group();
 const cadG = new THREE.Group();
-mundo.add(fondoG, cadG, analisisG, lugarG, objetosG, lucesG, cotasG, cotasUsuarioG, grillaG, seleccionG, guiaG);
+const fotosG = new THREE.Group();
+mundo.add(fondoG, cadG, fotosG, analisisG, lugarG, objetosG, lucesG, cotasG, cotasUsuarioG, grillaG, seleccionG, guiaG);
 
 const mapa3d = new Map();
 let paredes = [];
@@ -316,6 +377,7 @@ function limites() {
 /* ================================================================== construcción */
 
 function construirTodo() {
+  cambioEscena();
   vaciar(lugarG);
   vaciar(objetosG);
   vaciar(cotasG);
@@ -341,6 +403,7 @@ function construirTodo() {
   for (const o of estado.escena.objetos) agregarObjeto3D(o);
   construirFondo();
   construirCAD();
+  construirFotosMapa();
   construirGrilla();
   ajustarSol();
   construirLuces();
@@ -351,6 +414,7 @@ function construirTodo() {
 }
 
 function agregarObjeto3D(o) {
+  cambioEscena();
   const g = crearObjeto3D(o, { noche: estado.noche });
   const def = defDe(o);
   let et;
@@ -403,6 +467,7 @@ function reconstruirObjeto(o) {
 }
 
 function quitarObjeto3D(id) {
+  cambioEscena();
   const g = mapa3d.get(id);
   if (!g) return;
   objetosG.remove(g);
@@ -411,6 +476,7 @@ function quitarObjeto3D(id) {
 }
 
 function moverObjeto3D(o) {
+  cambioEscena();
   const g = mapa3d.get(o.id);
   if (!g) return;
   g.position.set(o.pos[0], o.elev || 0, o.pos[1]);
@@ -418,6 +484,7 @@ function moverObjeto3D(o) {
 }
 
 function construirGrilla() {
+  pedirRender();
   vaciar(grillaG);
   const b = limites();
   const cx = Math.round((b.minX + b.maxX) / 2);
@@ -456,6 +523,7 @@ function construirGrilla() {
 }
 
 function ajustarSol() {
+  cambioEscena();
   const b = limites();
   const cx = (b.minX + b.maxX) / 2;
   const cz = (b.minY + b.maxY) / 2;
@@ -481,6 +549,7 @@ function ajustarSol() {
 }
 
 function construirLuces() {
+  cambioEscena();
   vaciar(lucesG);
   haces = [];
   if (!estado.noche) return;
@@ -550,6 +619,7 @@ function posicionarHaces(t) {
 }
 
 function aplicarVisibilidad() {
+  cambioEscena();
   for (const o of estado.escena?.objetos || []) {
     const g = mapa3d.get(o.id);
     if (!g) continue;
@@ -626,6 +696,7 @@ function contornoSeleccion(o) {
 }
 
 function actualizarSeleccion3D() {
+  pedirRender();
   vaciar(seleccionG);
   for (const g of mapa3d.values()) g.userData.etq?.classList.remove('sel');
   const objs = selObjs();
@@ -703,6 +774,7 @@ function actualizarSeleccion3D() {
 /* ================================================================== cotas fijas */
 
 function dibujarCotas() {
+  pedirRender();
   vaciar(cotasUsuarioG);
   for (const c of estado.escena?.cotas || []) {
     const y = 0.04;
@@ -791,6 +863,7 @@ function puntoMedida(e) {
 }
 
 function dibujarGuia() {
+  pedirRender();
   vaciar(guiaG);
   const { a } = medida;
   const b = medida.b || medida.cursor;
@@ -1004,6 +1077,7 @@ const AYUDAS = {
   alinear: 'Mover el fondo: hacé clic en un punto de la imagen y después en el lugar de la escena donde tiene que quedar.',
   ubicar: 'Ubicación: hacé clic en el punto de la escena que corresponde a las coordenadas que pegaste.',
   alinearCad: 'Mover el plano: hacé clic en un punto del plano de AutoCAD y después en el lugar de la escena donde tiene que quedar.',
+  ubicarFoto: 'Foto en el mapa: hacé clic donde se sacó y después hacia dónde mira. Esc cancela.',
   nivel: 'Puntos de altura: hacé clic donde mediste y escribí su altura. Esc termina.',
 };
 
@@ -1093,7 +1167,7 @@ visor.addEventListener(
       if (p) agregarPuntoNivel(imantar(p.x, p.z, e));
       return;
     }
-    if (estado.herramienta === 'calibrar' || estado.herramienta === 'alinear' || estado.herramienta === 'ubicar' || estado.herramienta === 'alinearCad') {
+    if (estado.herramienta === 'calibrar' || estado.herramienta === 'alinear' || estado.herramienta === 'ubicar' || estado.herramienta === 'alinearCad' || estado.herramienta === 'ubicarFoto') {
       e.stopPropagation();
       const p = puntoPiso(e);
       if (p) clicCalibracion(imantar(p.x, p.z, { altKey: true }), e);
@@ -1306,6 +1380,8 @@ visor.addEventListener('dblclick', (e) => {
 
 // Las cotas fijas se eligen haciendo clic en su rótulo.
 visor.addEventListener('click', (e) => {
+  const foto = e.target.closest?.('[data-foto-mapa]');
+  if (foto) return abrirFoto(urlFoto(foto.dataset.fotoMapa), foto.dataset.fotoMapa);
   const et = e.target.closest?.('[data-cota]');
   if (et) seleccionarCota(et.dataset.cota);
 });
@@ -1358,6 +1434,7 @@ function ajustarOrto() {
 
 let encuadrePendiente = false;
 function redimensionar() {
+  pedirRender();
   const w = visor.clientWidth;
   const h = visor.clientHeight;
   if (!w || !h) return;
@@ -1435,6 +1512,7 @@ function nivelEn(x, z) {
 }
 
 function ponerVista(v) {
+  pedirRender(2);
   if (estado.caminando) ponerCaminar(false);
   const antes = estado.vista;
   if (v === antes) return;
@@ -1465,6 +1543,7 @@ function ponerVista(v) {
 }
 
 function ponerCaminar(activo) {
+  pedirRender(2);
   if (activo && estado.vista !== '3d') ponerVista('3d');
   estado.caminando = activo;
   $('#btn-caminar').setAttribute('aria-pressed', String(activo));
@@ -1517,21 +1596,33 @@ function animar() {
   requestAnimationFrame(animar);
   const dt = Math.min(reloj.getDelta(), 0.1);
   if (!enVista3D() || !visor.clientWidth) return;
-  if (estado.vista === 'planta') ctrlO.update();
+  let movio = false;
+  if (estado.vista === 'planta') movio = ctrlO.update();
   else if (estado.caminando) caminar(dt);
-  else ctrlP.update();
+  else movio = ctrlP.update();
+  // Caminando o con los haces de luz en movimiento (modo noche) se dibuja siempre.
+  const animando = estado.caminando || (haces.length > 0 && !reducirMovimiento);
+  if (movio) empezarMovimiento();
+  else if (moviendo && performance.now() - quietoDesde > 220) terminarMovimiento();
+  if (!movio && !animando && cuadrosPendientes <= 0) return;
+  cuadrosPendientes = Math.max(0, cuadrosPendientes - 1);
+  if (sombrasPendientes) {
+    renderer.shadowMap.needsUpdate = true;
+    sombrasPendientes = false;
+  }
   const cam = camActiva();
   actualizarParedes(cam);
   if (haces.length) posicionarHaces(reloj.elapsedTime);
   if (estado.vista === '3d') {
     pasoRender.camera = pasoAO.camera = pasoContorno.renderCamera = cam;
-    pasoAO.enabled = estado.ver.ao && !estado.noche;
+    pasoAO.enabled = estado.ver.ao && !estado.noche && !moviendo && !estado.caminando;
     composer.render(dt);
   } else renderer.render(mundo, cam);
   capaEtiquetas.render(mundo, cam);
 }
 
 function aplicarFondo() {
+  pedirRender();
   mundo.background.copy(estado.noche ? FONDOS.noche : FONDOS[estado.tema]);
 }
 
@@ -2308,7 +2399,7 @@ function htmlPropiedades(o) {
       ${checkObj('propio', 'Es nuestro (no se paga)', o.propio === true)}
       ${selectObj('mapa', 'En el mapa para el público', { '': def.publico ? 'Sí (automático)' : 'No (automático)', si: 'Mostrar', no: 'No mostrar' }, o.mapa === true ? 'si' : o.mapa === false ? 'no' : '')}
       ${selectObj('capa', 'Capa', { '': 'Sin capa', ...Object.fromEntries((estado.escena.capas || []).map((c) => [c.id, c.nombre])), __nueva: 'Nueva capa…' }, o.capa || '')}
-      <div class="fila-botones"><button data-accion="a-catalogo" title="Para usarlo en cualquier escena desde la biblioteca">${icono('mas')} Guardar en mi catálogo</button></div>
+      <div class="fila-botones"><button data-accion="a-catalogo" title="Para usarlo en cualquier escena desde la biblioteca">${icono('mas')} Guardar en mi catálogo</button><button data-accion="vista-frente" title="Hoja con todas las alturas">${icono('escala')} Vista de frente</button></div>
       ${o.grupo ? `<p class="dato">${icono('grupo')} Es parte de un grupo de ${idsDelGrupo(o.id).length} objetos. <button class="enlace" data-accion="desagrupar">Separar</button></p>` : ''}`
     )}
     ${seccion(
@@ -2343,6 +2434,8 @@ function htmlMulti(objs) {
     <div class="fila-botones">
       ${new Set(objs.map((o) => o.grupo)).size === 1 && objs[0].grupo ? `<button data-accion="desagrupar" title="Ctrl+Shift+G">${icono('grupo')} Separar grupo</button>` : `<button data-accion="agrupar" title="Ctrl+G">${icono('grupo')} Agrupar</button>`}
       <button data-accion="a-bloque" title="Para soltarlo entero en cualquier escena">${icono('mas')} Guardar como bloque</button>
+      <button data-accion="vista-frente" title="Hoja con todas las alturas">${icono('escala')} Vista de frente</button>
+      <button data-accion="vista-costado">${icono('escala')} De costado</button>
     </div>
     <label class="campo"><span>Capa</span><select data-multi="capa">${opcionesSelect({ '': valorComun(objs, (o) => o.capa || '') === null ? 'Varias' : 'Sin capa', ...Object.fromEntries((estado.escena.capas || []).map((c) => [c.id, c.nombre])), __nueva: 'Nueva capa…' }, valorComun(objs, (o) => o.capa || '') || '')}</select></label>
     ${seccion(
@@ -2458,6 +2551,7 @@ function htmlProyecto() {
       </div>
       <p class="ayuda">Cuenta el piso libre de objetos apoyados. Sirve para planificar; no reemplaza la habilitación del lugar.</p>`
     )}
+    ${seccion('Checklist de armado en el celular', '<div id="estado-checklist"><p class="ayuda">Consultando…</p></div>', { abierta: false })}
     ${seccion('Historial y copia en la nube', `<div id="estado-historial"><p class="ayuda">Consultando…</p></div><div class="fila-botones"><button data-accion="versiones-abrir">${icono('reloj')} Versiones anteriores</button><button data-accion="historial-ahora">Guardar en el historial ahora</button></div>`, { abierta: false })}
     ${seccion(
       'Resumen',
@@ -2542,6 +2636,7 @@ function htmlHojaOpciones() {
           )
         : ''
     }
+    ${seccion('Vistas de frente', htmlVistasFrente(), { abierta: Boolean(estado.escena.vistas?.length) })}
     ${seccion('Revisiones', htmlRevisiones(), { abierta: false })}
     <p class="ayuda">El evento, la fecha, el lugar y el responsable salen de los datos del proyecto: en la vista 3D, hacé clic en el vacío para verlos.</p>
     <div class="acciones-det apiladas">
@@ -2577,11 +2672,13 @@ function renderDetalle() {
   }
   if (estado.vista === 'plano') der.innerHTML = htmlHojaOpciones();
   else if (estado.vista === 'materiales') der.innerHTML = htmlComputoOpciones();
+  else if (estado.vista === 'produccion') der.innerHTML = htmlPanelProduccion();
   else if (estado.selCota && cotaPorId(estado.selCota)) der.innerHTML = htmlCota(cotaPorId(estado.selCota));
   else if (estado.sel.size === 1) der.innerHTML = htmlPropiedades(selUnico());
   else if (estado.sel.size > 1) der.innerHTML = htmlMulti(selObjs());
   else der.innerHTML = htmlProyecto();
   if ($('#estado-historial')) cargarEstadoHistorial();
+  if ($('#estado-checklist')) cargarEstadoChecklist();
 }
 
 function refrescarCampos() {
@@ -2625,7 +2722,7 @@ function aplicarCampo(o, campo, el) {
       delete o[campo];
       return redibujo;
     }
-    const v = n();
+    const v = campo === 'costo' ? leerMonto(el.value) : n();
     if (v === null || v < minimo) return false;
     o[campo] = entero ? Math.round(v) : r3(v);
     return redibujo;
@@ -2901,6 +2998,15 @@ function aplicarCampoEscena(el) {
     construirCAD();
     return true;
   }
+  if (/^(seguridad|servicios)\./.test(clave)) {
+    const [grupo, k] = clave.split('.');
+    const v = leerNumero(el.value);
+    if (v === null || v <= 0) return false;
+    e[grupo] = { ...(e[grupo] || {}), [k]: r3(v) };
+    const datos = $('#datos-seguridad');
+    if (datos) datos.innerHTML = datosSeguridad();
+    return true;
+  }
   if (clave === 'sonido.ganancia') {
     const v = leerNumero(el.value);
     if (v === null) return false;
@@ -2985,6 +3091,7 @@ function renderHoja() {
   if (!estado.escena) return;
   if (estado.vista === 'plano') renderPlano();
   else if (estado.vista === 'materiales') renderMateriales();
+  else if (estado.vista === 'produccion') renderProduccion();
 }
 
 // Todas las hojas del plano. fondoHref: en pantalla, la dirección de la imagen de fondo; en los archivos
@@ -3002,6 +3109,10 @@ function hojasDelPlano(fondoHref = urlFondo()) {
 // esté tildado en las opciones del plano. Las arman sus módulos.
 const generadoresHojas = [
   { clave: 'hojaSonido', nombre: 'Cobertura de sonido', crear: (e, comp, op) => hojaSonido(escenaSonido(e), comp, op) },
+  { clave: 'hojaEmergencia', nombre: 'Plano de emergencia (salidas y matafuegos)', crear: (e, comp, op) => hojaEmergencia(e, comp, op) },
+  { clave: 'hojasVistas', nombre: 'Vistas de frente con alturas', porDefecto: true, crear: (e, comp, op) => hojasElevaciones(e, comp, op) },
+  { clave: 'hojaLogistica', nombre: 'Carga y descarga (proveedores)', crear: (e, comp, op) => hojaLogistica(e, comp, op) },
+  { clave: 'hojasProveedores', nombre: 'Una hoja para cada proveedor', crear: (e, comp, op) => hojasProveedores(e, comp, op) },
   { clave: 'hojaElectrica', nombre: 'Plano eléctrico', crear: (e, comp, op) => hojaElectrica(e, comp, op) },
   {
     clave: 'hojaSombras',
@@ -3367,12 +3478,47 @@ function htmlPestanaTecnica() {
     ${htmlSeccionTerreno()}`;
 }
 
+let mapaDistanciasActual = null;
+
+function datosSeguridad() {
+  const e = estado.escena;
+  try {
+    const salidas = analizarSalidas(e);
+    return htmlSeguridad(e, { salidas, servicios: analizarServicios(e, salidas), mapa: estado.analisis === 'distancias' ? mapaDistanciasActual : null });
+  } catch (err) {
+    console.error(err);
+    return `<p class="dato aviso">${icono('advertencia')} No se pudo calcular: ${esc(err.message)}</p>`;
+  }
+}
+
 function htmlPestanaSeguridad() {
-  return seccion('Seguridad', '<p class="ayuda">Salidas, distancias de evacuación y servicios.</p>');
+  inyectarEstilos('seguridad', CSS_SEGURIDAD);
+  const e = estado.escena;
+  const s = opcionesSeguridad(e);
+  const sv = opcionesServicios(e);
+  const regla = (grupo, clave, texto, valor, unidad, dec = 0) => campoNum('data-escena', `${grupo}.${clave}`, texto, valor, unidad, dec);
+  return `
+    ${seccion('Salidas y servicios', `<div class="fila-botones">${botonCapaAnalisis('distancias', 'Ver la distancia a las salidas')}</div><div id="datos-seguridad">${datosSeguridad()}</div>`)}
+    ${seccion(
+      'Reglas que se usan',
+      `<div class="campos">
+        ${regla('seguridad', 'personasPorUnidad', 'Personas por unidad de salida', s.personasPorUnidad, 'pers.')}
+        ${regla('seguridad', 'anchoUnidad', 'Ancho de cada unidad', s.anchoUnidad, 'm', 2)}
+        ${regla('seguridad', 'distanciaMax', 'Distancia máxima a una salida', s.distanciaMax, 'm')}
+        ${regla('seguridad', 'radioMatafuego', 'Alcance de cada matafuego', s.radioMatafuego, 'm')}
+        ${regla('servicios', 'personasPorBano', 'Personas por baño', sv.personasPorBano, 'pers.')}
+        ${regla('servicios', 'personasPorMetroBarra', 'Personas por metro de barra', sv.personasPorMetroBarra, 'pers.')}
+        ${regla('servicios', 'personasPorAgua', 'Personas por punto de agua', sv.personasPorAgua, 'pers.')}
+        ${regla('servicios', 'm2PorMatafuego', 'm² por matafuego', sv.m2PorMatafuego, 'm²')}
+      </div>
+      <p class="ayuda">Son valores habituales: ajustalos a lo que pida el municipio. Sirve para planificar y no reemplaza la habilitación.</p>`,
+      { abierta: false }
+    )}`;
 }
 
 // Capas de análisis sobre la vista (una a la vez).
 function construirAnalisis() {
+  pedirRender();
   analisisG.traverse((n) => n.material?.map?.dispose?.());
   vaciar(analisisG);
   const ley = $('#leyenda-analisis');
@@ -3380,7 +3526,20 @@ function construirAnalisis() {
   const tipo = estado.analisis;
   if (!tipo || !estado.escena) return;
   try {
-    if (tipo === 'sombras') {
+    if (tipo === 'distancias') {
+      const e = estado.escena;
+      mapaDistanciasActual = mapaDistancias(e);
+      const lim = opcionesSeguridad(e).distanciaMax;
+      const col = colorearDistancias(mapaDistanciasActual, lim);
+      planoDeTextura({ minX: col.origen[0], minY: col.origen[1], maxX: col.origen[0] + col.ancho, maxY: col.origen[1] + col.alto }, col);
+      mostrarLeyenda('Distancia caminando a la salida más cercana', [
+        ['#2FBF71', 'Cerca de una salida'],
+        ['#E8AA4C', `Cerca del límite (${fm(lim, 0)} m)`],
+        ['#FF3B30', `Más lejos que ${fm(lim, 0)} m`],
+      ]);
+      const datos = $('#datos-seguridad');
+      if (datos) datos.innerHTML = datosSeguridad();
+    } else if (tipo === 'sombras') {
       const r = sombras(estado.escena, fechaSol());
       const mat = new THREE.MeshBasicMaterial({ color: '#05060a', transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide });
       for (const p of r?.poligonos || []) {
@@ -3576,6 +3735,7 @@ async function agregarPuntoNivel(p) {
 
 // Los puntos de altura se ven mientras se cargan (y con la capa del terreno).
 function dibujarPuntosNivel() {
+  pedirRender();
   vaciar(guiaG);
   if (estado.herramienta !== 'nivel' && estado.analisis !== 'terreno') return;
   for (const [x, y, z] of estado.escena?.terreno?.puntos || []) {
@@ -3618,6 +3778,7 @@ const transformarCAD = (f) => {
 };
 
 async function construirCAD() {
+  pedirRender();
   vaciar(cadG);
   const f = estado.escena?.fondoCAD;
   if (!f || f.oculto || !estado.ver.fondo) return;
@@ -3637,6 +3798,7 @@ async function construirCAD() {
   lineas.userData.propio = true;
   lineas.raycast = () => {};
   cadG.add(lineas);
+  pedirRender();
 }
 
 async function importarDXF(archivo) {
@@ -3692,6 +3854,245 @@ function htmlFondoCAD() {
     </div>
     <label class="check"><input type="checkbox" data-escena="cad.enPlano"${f.enPlano !== false ? ' checked' : ''}> Mostrarlo en el plano impreso</label>
     <div class="fila-botones"><button data-accion="cad-mover">${icono('mano')} Mover</button><button class="peligro" data-accion="cad-quitar">${icono('basura')} Quitar</button></div>`;
+}
+
+/* ------------------------------------------------------------------ checklist en el celular */
+
+async function cargarEstadoChecklist() {
+  const cont = $('#estado-checklist');
+  if (!cont) return;
+  if (muestra) {
+    cont.innerHTML = '<p class="ayuda">El checklist funciona con la herramienta abierta en la compu: el equipo lo usa desde el celular, conectado a la misma red wifi.</p>';
+    return;
+  }
+  try {
+    const [red, ch] = await Promise.all([fetch('/api/red').then((r) => r.json()), fetch(`/api/checklist/${estado.slug}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { estados: {} }))]);
+    const items = itemsChecklist(estado.escena).flatMap((sec) => sec.items);
+    const p = progreso(items, ch.estados || {});
+    let html = `<p class="dato"><strong>${fm(p.porcentaje, 0)} %</strong> listo: ${p.armado} armados, ${p.llego} llegaron, ${p.problema} con problemas, de ${p.total}.</p>`;
+    if (red.red && red.direcciones?.length) {
+      const url = `${red.direcciones[0]}/checklist.html#${encodeURIComponent(estado.slug)}`;
+      html += `<div class="qr-checklist"><svg viewBox="0 0 100 100" width="148" height="148" role="img" aria-label="Código QR">${qrSVG(url, { x: 0, y: 0, lado: 100 })}</svg><p class="ayuda">El equipo lo escanea con el celular (en la misma red wifi):<br>${esc(url)}</p></div>`;
+    } else {
+      html += '<p class="ayuda">Para que el equipo lo use desde el celular: cerrá House Mates Plano (menú ⋯, Cerrar) y abrilo con <strong>abrir-red.bat</strong>. Acá va a aparecer un QR para escanear.</p>';
+    }
+    html += `<div class="fila-botones"><a class="boton" href="checklist.html#${encodeURIComponent(estado.slug)}" target="_blank" rel="noopener">${icono('check')} Abrir el checklist</a></div>`;
+    cont.innerHTML = html;
+  } catch {
+    cont.innerHTML = '<p class="ayuda">Para usar el checklist, cerrá la herramienta y abrila de nuevo desde el escritorio (esta ventana es de antes de la actualización).</p>';
+  }
+}
+
+/* ------------------------------------------------------------------ vistas de frente */
+
+function htmlVistasFrente() {
+  const vistas = estado.escena.vistas || [];
+  if (!vistas.length) {
+    return `<p class="ayuda">Elegí objetos en el 3D (la cabina con su estructura, por ejemplo) y tocá "Vista de frente" en el panel: sale una hoja con todas las alturas.</p>
+      ${vistaPorDefecto(estado.escena) ? `<div class="fila-botones"><button data-accion="vista-cabina">${icono('mas')} Agregar el frente de la cabina</button></div>` : ''}`;
+  }
+  return vistas
+    .map(
+      (v) => `<div class="vista-frente">
+        <div class="vista-frente-cabeza"><strong>${esc(v.nombre || 'Vista')}</strong><span class="tenue">${v.lado === 'costado' ? 'de costado' : 'de frente'} · ${(v.ids || []).length} objetos</span><button class="mini" data-vista-borrar="${esc(v.id)}" title="Quitar la vista">${icono('cerrar')}</button></div>
+        <div class="vista-frente-dibujo">${elevacionSVG(estado.escena, v.ids || [], { lado: v.lado, referencia: v.referencia, ancho: 640, alto: 420 })}</div>
+      </div>`
+    )
+    .join('');
+}
+
+function agregarVistaFrente(lado = 'frente') {
+  const ids = [...estado.sel];
+  if (!ids.length) return aviso('Elegí uno o más objetos primero.', 'error');
+  antesDeCambiar();
+  const v = nuevaVista(estado.escena, ids, lado);
+  estado.escena.vistas = [...(estado.escena.vistas || []), v];
+  marcarCambio({ detalle: true });
+  aviso(`Vista "${v.nombre}" agregada. Sale en el PDF del plano, después de la planta (opciones del plano, Hojas extra).`, 'ok', 7000);
+}
+
+/* ------------------------------------------------------------------ mapa para el público */
+
+let fuentesMapa = null;
+async function fuentesParaMapa() {
+  if (!fuentesMapa) {
+    try {
+      fuentesMapa = await cargarFuentes('vendor/fuentes/');
+    } catch {
+      fuentesMapa = undefined;
+    }
+  }
+  return fuentesMapa || undefined;
+}
+
+function opcionesMapaElegidas() {
+  return {
+    formato: $('#mapa-formato').value,
+    tema: $('#mapa-tema').value,
+    orientacion: $('#mapa-orientacion').value,
+    titulo: $('#mapa-titulo').value.trim() || undefined,
+    subtitulo: $('#mapa-subtitulo').value.trim() || undefined,
+  };
+}
+
+let mapaActual = null;
+async function dibujarMapaPublico() {
+  const op = opcionesMapaElegidas();
+  try {
+    mapaActual = generarMapaPublico(estado.escena, { ...op, fuentes: await fuentesParaMapa() });
+    const v = $('#mapa-vista');
+    v.innerHTML = mapaActual.svg;
+    const svg = v.querySelector('svg');
+    if (svg) {
+      svg.removeAttribute('width');
+      svg.removeAttribute('height');
+    }
+    $('#mapa-avisos').textContent = (mapaActual.avisos || []).join(' ');
+  } catch (err) {
+    console.error(err);
+    $('#mapa-avisos').textContent = `No se pudo armar el mapa: ${err.message}`;
+  }
+}
+
+async function abrirMapaPublico() {
+  const e = estado.escena;
+  const guardado = e.mapaPublico || {};
+  $('#mapa-formato').innerHTML = Object.entries(FORMATOS_MAPA).map(([k, f]) => `<option value="${k}"${k === (guardado.formato || 'historia') ? ' selected' : ''}>${esc(f.nombre)}</option>`).join('');
+  $('#mapa-tema').value = guardado.tema || 'oscuro';
+  $('#mapa-orientacion').value = guardado.orientacion || 'ajustar';
+  $('#mapa-titulo').value = guardado.titulo || '';
+  $('#mapa-titulo').placeholder = e.proyecto?.evento || e.nombre;
+  $('#mapa-subtitulo').value = guardado.subtitulo || '';
+  $('#dlg-mapa').showModal();
+  await dibujarMapaPublico();
+}
+
+// Para el visor de WhatsApp: el mapa en formato posteo.
+async function svgMapaPublico() {
+  try {
+    return generarMapaPublico(estado.escena, { ...(estado.escena.mapaPublico || {}), formato: 'posteo', fuentes: await fuentesParaMapa() }).svg;
+  } catch {
+    return '';
+  }
+}
+
+/* ------------------------------------------------------------------ producción */
+
+function contextoProduccion() {
+  const c = estado.comparacion;
+  return { ahora: new Date(), listaEscenas, slugActual: estado.slug, otraEscena: c?.escena, nombreOtra: c?.nombre, slugOtra: c?.slug };
+}
+
+function renderProduccion() {
+  const cont = $('#hoja-contenido');
+  const activo = document.activeElement?.closest?.('#hoja-contenido') ? document.activeElement.dataset.prod : null;
+  const scroll = cont.scrollTop;
+  cont.className = 'hoja-contenido produccion-vista';
+  $('#hoja-barra').hidden = true;
+  try {
+    cont.innerHTML = htmlProduccion(estado.escena, estado.pestanaProd, contextoProduccion());
+  } catch (err) {
+    console.error(err);
+    cont.innerHTML = `<p class="vacio-panel">No se pudo mostrar producción: ${esc(err.message)}</p>`;
+  }
+  cont.scrollTop = scroll;
+  if (activo) cont.querySelector(`[data-prod="${CSS.escape(activo)}"]`)?.focus();
+}
+
+function htmlPanelProduccion() {
+  return `<div class="det-cabeza"><span class="det-icono">${icono('produccion')}</span><div class="titulo-fijo">Producción</div></div>
+    ${seccion(
+      'Para el equipo',
+      `<p class="ayuda">El cronograma, los proveedores, el staff y el presupuesto se guardan con la escena. Las hojas para imprimir (una por proveedor y la de carga y descarga) se eligen en el Plano, en "Hojas extra".</p>
+      <div class="acciones-det apiladas">
+        <button data-prod-accion="exportar:orden-del-dia">${icono('reloj')} Orden del día (texto)</button>
+        <button data-prod-accion="exportar:cronograma-csv">${icono('tabla')} Cronograma (CSV)</button>
+        <button data-prod-accion="exportar:presupuesto-csv">${icono('dinero')} Presupuesto (CSV)</button>
+      </div>`
+    )}`;
+}
+
+async function cargarParaComparar(slug) {
+  if (!slug) {
+    estado.comparacion = null;
+    return renderProduccion();
+  }
+  try {
+    const r = await fetch(muestra ? `escenas/${encodeURIComponent(slug)}.json` : `/api/escenas/${encodeURIComponent(slug)}`, { cache: 'no-store' });
+    const escena = normalizarEscena(await r.json());
+    estado.comparacion = { escena, nombre: escena.nombre, slug };
+  } catch {
+    aviso('No se pudo abrir esa escena para comparar.', 'error');
+    estado.comparacion = null;
+  }
+  renderProduccion();
+}
+
+function accionProduccion(accion) {
+  const antes = estado.ultimo;
+  let r;
+  try {
+    r = aplicarAccion(estado.escena, accion, { seleccion: [...estado.sel] }) || {};
+  } catch (err) {
+    console.error(err);
+    return aviso(`No se pudo: ${err.message}`, 'error');
+  }
+  if (r.cambio) {
+    estado.deshacer.push(antes);
+    estado.rehacer.length = 0;
+    marcarCambio({ lista: true });
+    if (estado.vista === 'produccion') renderProduccion();
+  }
+  if (r.mensaje) aviso(r.mensaje);
+  if (r.descarga) descargarTexto(r.descarga.texto, r.descarga.nombre, r.descarga.tipo || 'text/plain');
+  if (r.seleccionar?.length) {
+    ponerVista('3d');
+    ponerSeleccion(r.seleccionar);
+    centrarEn(selObjs());
+  }
+  if (r.foco) $(`[data-prod="${CSS.escape(r.foco)}"]`)?.focus();
+}
+
+/* ------------------------------------------------------------------ fotos ubicadas en el mapa */
+
+// Cada foto del lugar puede tener un pin en la planta: dónde se sacó y hacia dónde mira. Un clic la abre.
+function construirFotosMapa() {
+  vaciar(fotosG);
+  if (!estado.ver.fotos) return;
+  const mat = new THREE.MeshBasicMaterial({ color: '#2447f5', transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide });
+  for (const f of estado.escena?.fotosMapa || []) {
+    if (!Array.isArray(f.pos)) continue;
+    const g = new THREE.Group();
+    g.position.set(f.pos[0], 0.03, f.pos[1]);
+    // Cono de lo que se ve en la foto (unos 60°, 6 m).
+    const t = ((f.mira || 0) * Math.PI) / 180;
+    // La forma se dibuja en XY y se acuesta: su y pasa a ser -z, por eso va con el signo cambiado.
+    const forma = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(Math.sin(t - 0.52) * 6, -Math.cos(t - 0.52) * 6), new THREE.Vector2(Math.sin(t + 0.52) * 6, -Math.cos(t + 0.52) * 6)]);
+    const cono = new THREE.Mesh(new THREE.ShapeGeometry(forma).rotateX(-Math.PI / 2), mat);
+    cono.raycast = () => {};
+    cono.renderOrder = 4;
+    g.add(cono);
+    const div = document.createElement('button');
+    div.className = 'pin-foto';
+    div.dataset.fotoMapa = f.archivo;
+    div.title = `Foto: ${f.archivo}`;
+    div.innerHTML = icono('foto');
+    const et = new CSS2DObject(div);
+    g.add(et);
+    fotosG.add(g);
+  }
+  pedirRender();
+}
+
+function urlFoto(archivo) {
+  return `fotos/${estado.slug}/${encodeURIComponent(archivo)}`;
+}
+
+function abrirFoto(url, titulo = '') {
+  const dlg = $('#dlg-foto');
+  $('img', dlg).src = url;
+  $('img', dlg).alt = titulo;
+  dlg.showModal();
 }
 
 /* ------------------------------------------------------------------ cerrar, historial y nube */
@@ -3927,6 +4328,7 @@ function cargarTexturaFondo(url) {
 }
 
 function construirFondo() {
+  cambioEscena();
   vaciar(fondoG);
   const f = estado.escena?.fondo;
   if (!f || f.oculto || !estado.ver.fondo) return;
@@ -3945,6 +4347,7 @@ function construirFondo() {
     .then((t) => {
       material.map = t;
       material.needsUpdate = true;
+      pedirRender();
       // Si la proporción guardada no coincide con la imagen, se corrige (por ejemplo, si la cambiaron a mano).
       const prop = t.image.height / t.image.width;
       if (Math.abs(prop - (f.proporcion || 0)) > 0.005 && estado.escena?.fondo === f) {
@@ -4023,6 +4426,7 @@ function iniciarCalibracion(modo, extra = {}) {
 }
 
 function dibujarCalibracion() {
+  pedirRender();
   vaciar(guiaG);
   if (!calibracion?.a) return;
   const m = new THREE.Mesh(geoPunto, matPunto);
@@ -4039,6 +4443,21 @@ function clicCalibracion(p) {
   const c = calibracion;
   if (!c) return;
   if (c.modo === 'ubicar') return ubicarEn(p);
+  if (c.modo === 'ubicarFoto') {
+    if (!c.a) {
+      c.a = p;
+      dibujarCalibracion();
+      return aviso('Ahora hacé clic hacia dónde mira la foto.');
+    }
+    const mira = r3((((Math.atan2(p[0] - c.a[0], p[1] - c.a[1]) * 180) / Math.PI) + 360) % 360);
+    antesDeCambiar();
+    const otras = (estado.escena.fotosMapa || []).filter((f) => f.archivo !== c.archivo);
+    estado.escena.fotosMapa = [...otras, { archivo: c.archivo, pos: [r3(c.a[0]), r3(c.a[1])], mira }];
+    marcarCambio();
+    construirFotosMapa();
+    ponerHerramienta('seleccionar');
+    return aviso('Foto ubicada. Un clic en el pin de la cámara la abre.');
+  }
   if (!c.a) {
     c.a = p;
     dibujarCalibracion();
@@ -4403,7 +4822,12 @@ async function cargarFotos() {
   $('#cuenta-fotos').textContent = fotos.length ? String(fotos.length) : '';
   $('#fotos-carpeta').textContent = `fotos/${estado.slug}`;
   $('#fotos-rejilla').innerHTML = fotos.length
-    ? fotos.map((f) => `<button class="miniatura" data-foto="${esc(f.url)}" title="${esc(f.nombre)}"><img src="${esc(f.url)}" alt="${esc(f.nombre)}" loading="lazy"></button>`).join('')
+    ? fotos
+        .map((f) => {
+          const ubicada = (estado.escena?.fotosMapa || []).some((x) => x.archivo === f.nombre);
+          return `<div class="foto-item"><button class="miniatura" data-foto="${esc(f.url)}" title="${esc(f.nombre)}"><img src="${esc(f.url)}" alt="${esc(f.nombre)}" loading="lazy"></button>${ubicada ? `<button class="mini-texto" data-quitar-foto="${esc(f.nombre)}">Quitar del mapa</button>` : `<button class="mini-texto" data-ubicar-foto="${esc(f.nombre)}">${icono('marcador')} Ubicar</button>`}</div>`;
+        })
+        .join('')
     : '<p class="vacio-panel">Todavía no hay fotos de este lugar.</p>';
 }
 
@@ -4466,6 +4890,9 @@ const exportar = {
   },
   json() {
     descargarTexto(textoEscena(), `${nombreArchivo()}.json`, 'application/json');
+  },
+  mapa() {
+    abrirMapaPublico();
   },
   async visor() {
     aviso('Armando el visor…');
@@ -4606,6 +5033,84 @@ function conectarInterfaz() {
     if (b && !b.disabled) volverAVersion(b);
   });
 
+  // Producción: campos (al terminar de escribir), acciones, pestañas, comparar y la barra de tiempo.
+  document.addEventListener('change', (e) => {
+    const t = e.target;
+    if (t.matches?.('[data-prod-comparar]')) return cargarParaComparar(t.value);
+    if (!t.dataset?.prod || !estado.escena) return;
+    const antes = estado.ultimo;
+    let cambio = false;
+    try {
+      cambio = aplicarEdicion(estado.escena, t);
+    } catch (err) {
+      console.error(err);
+      aviso(`No se pudo: ${err.message}`, 'error');
+    }
+    if (!cambio) return;
+    estado.deshacer.push(antes);
+    estado.rehacer.length = 0;
+    marcarCambio({ lista: true });
+    if (estado.vista === 'produccion') renderProduccion();
+  });
+  document.addEventListener('input', (e) => {
+    const t = e.target;
+    if (!t.matches?.('[data-prod-momento]')) return;
+    const texto = $('[data-prod-momento-texto]');
+    if (texto) texto.textContent = fechaHoraProd(Number(t.value));
+    const resumen = $('[data-prod-momento-resumen]');
+    if (resumen) resumen.innerHTML = htmlResumenEstado(estado.escena, Number(t.value));
+  });
+  document.addEventListener('click', (e) => {
+    const pest = e.target.closest?.('[data-prod-pestana]');
+    if (pest) {
+      estado.pestanaProd = pest.dataset.prodPestana;
+      return renderProduccion();
+    }
+    const accion = e.target.closest?.('[data-prod-accion]');
+    if (accion) return accionProduccion(accion.dataset.prodAccion);
+    const ubicar = e.target.closest?.('[data-ubicar-foto]');
+    if (ubicar) {
+      abrirFotos(false);
+      iniciarCalibracion('ubicarFoto', { archivo: ubicar.dataset.ubicarFoto });
+      return aviso('Hacé clic donde se sacó la foto y después hacia dónde mira.');
+    }
+    const quitar = e.target.closest?.('[data-quitar-foto]');
+    if (quitar) {
+      antesDeCambiar();
+      estado.escena.fotosMapa = (estado.escena.fotosMapa || []).filter((f) => f.archivo !== quitar.dataset.quitarFoto);
+      marcarCambio();
+      construirFotosMapa();
+      return cargarFotos();
+    }
+  });
+
+  // Mapa para el público.
+  for (const id of ['#mapa-formato', '#mapa-tema', '#mapa-orientacion']) $(id).addEventListener('change', dibujarMapaPublico);
+  for (const id of ['#mapa-titulo', '#mapa-subtitulo']) $(id).addEventListener('change', dibujarMapaPublico);
+  $('#dlg-mapa-cerrar').addEventListener('click', () => {
+    const op = opcionesMapaElegidas();
+    const antes = estado.escena.mapaPublico || {};
+    if (Object.keys(op).some((k) => antes[k] !== op[k])) {
+      antesDeCambiar();
+      estado.escena.mapaPublico = { ...(estado.escena.mapaPublico || {}), ...op };
+      marcarCambio();
+    }
+    $('#dlg-mapa').close();
+  });
+  $('#mapa-png').addEventListener('click', async () => {
+    if (!mapaActual) return;
+    aviso('Armando la imagen…');
+    const { svg, ancho, alto } = mapaActual;
+    const formato = $('#mapa-formato').value;
+    try {
+      const blob = await mapaAImagen(svg, ancho, alto, { escala: FORMATOS_MAPA[formato]?.unidad === 'mm' ? 11.81 : 1 });
+      descargarBlob(blob, `${nombreArchivo()}-mapa-${formato}.png`);
+    } catch (err) {
+      aviso(`No se pudo armar la imagen: ${err.message}. Probá con el SVG.`, 'error');
+    }
+  });
+  $('#mapa-svg').addEventListener('click', () => mapaActual && descargarTexto(mapaActual.svg, `${nombreArchivo()}-mapa-${$('#mapa-formato').value}.svg`, 'image/svg+xml'));
+
   // Zoom de la hoja
   $('#hoja-ajustar').addEventListener('click', () => {
     estado.zoomHoja = null;
@@ -4620,6 +5125,7 @@ function conectarInterfaz() {
   $('#hoja-menos').addEventListener('click', () => zoomRel(0.8));
   new ResizeObserver(() => estado.vista === 'plano' && aplicarZoomHoja()).observe($('#hoja-contenido'));
   $('#hoja-contenido').addEventListener('click', (e) => {
+    if (e.target.closest('input, select, textarea, button, a, label')) return;
     const fila = e.target.closest('tr[data-ids]');
     if (!fila) return;
     ponerVista('3d');
@@ -4659,7 +5165,7 @@ function conectarInterfaz() {
     estado.paso = Number(paso.value);
     guardarPref();
   });
-  for (const clave of ['nombres', 'cotas', 'grilla', 'transparentar', 'copas', 'ao', 'fondo']) {
+  for (const clave of ['nombres', 'cotas', 'grilla', 'transparentar', 'copas', 'ao', 'fondo', 'fotos']) {
     const c = $(`#ver-${clave}`);
     if (!c) continue;
     c.checked = estado.ver[clave];
@@ -4667,6 +5173,7 @@ function conectarInterfaz() {
       estado.ver[clave] = c.checked;
       aplicarVisibilidad();
       if (clave === 'fondo') construirFondo();
+      if (clave === 'fotos') construirFotosMapa();
       guardarPref();
     });
   }
@@ -4889,6 +5396,13 @@ function conectarInterfaz() {
     t.dispatchEvent(new Event('input', { bubbles: true }));
   });
   der.addEventListener('click', (e) => {
+    const borrarVista = e.target.closest('[data-vista-borrar]');
+    if (borrarVista) {
+      antesDeCambiar();
+      estado.escena.vistas = (estado.escena.vistas || []).filter((v) => v.id !== borrarVista.dataset.vistaBorrar);
+      marcarCambio({ detalle: true });
+      return renderPlano();
+    }
     const pest = e.target.closest('[data-pestana-detalle]');
     if (pest) {
       estado.pestanaDetalle = pest.dataset.pestanaDetalle;
@@ -5001,6 +5515,15 @@ function conectarInterfaz() {
         renderPlano();
         aviso(`Revisión ${rev} marcada. Sale en el cuadro de datos del plano.`);
       });
+    } else if (a === 'vista-frente') agregarVistaFrente('frente');
+    else if (a === 'vista-costado') agregarVistaFrente('costado');
+    else if (a === 'vista-cabina') {
+      const v = vistaPorDefecto(estado.escena);
+      if (!v) return;
+      antesDeCambiar();
+      estado.escena.vistas = [...(estado.escena.vistas || []), v];
+      marcarCambio({ detalle: true });
+      renderPlano();
     } else if (a === 'agrupar') agrupar();
     else if (a === 'desagrupar') desagrupar();
     else if (a === 'duplicar') duplicar();
@@ -5110,6 +5633,7 @@ function conectarInterfaz() {
       2: () => ponerVista('planta'),
       3: () => ponerVista('plano'),
       4: () => ponerVista('materiales'),
+      5: () => ponerVista('produccion'),
       '?': () => $('#dlg-ayuda').showModal(),
       escape: () => {
         if (estado.caminando) return ponerCaminar(false);
@@ -5128,7 +5652,7 @@ function conectarInterfaz() {
     };
     const accion = acciones[k];
     if (!accion) return;
-    if (!enVista3D() && !['1', '2', '3', '4', '?', 'n'].includes(k)) return;
+    if (!enVista3D() && !['1', '2', '3', '4', '5', '?', 'n'].includes(k)) return;
     if (k.startsWith('arrow')) e.preventDefault();
     accion();
   });
@@ -5163,6 +5687,7 @@ function conectarEventos() {
     if (d.tipo === 'lista' || d.nueva) await cargarLista();
     if (d.tipo === 'datos') cargarDatosGenerales();
     if (d.tipo === 'cerrado') document.documentElement.classList.add('cerrado');
+    if (d.tipo === 'checklist' && d.slug === estado.slug && $('#estado-checklist')) cargarEstadoChecklist();
     if (d.tipo === 'escena' && d.slug === estado.slug) await recargarDesdeArchivo();
     if (d.tipo === 'error' && d.slug === estado.slug) aviso(`El archivo escenas/${d.slug}.json tiene un error de formato y no se cargó: ${d.mensaje}`, 'error', 9000);
   };

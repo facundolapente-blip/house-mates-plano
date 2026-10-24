@@ -108,7 +108,27 @@ Tipos nuevos: `carpa`, `generador`, `tablero`, `foodtruck`, `agua`, `guardarropa
 - `aforo`: cantidad de gente esperada (entradas). Si falta, usar la capacidad estimada.
 - `seguridad.personasPorUnidad` y `anchoUnidad`: cuántas personas por cada unidad de ancho de salida y cuánto mide
   esa unidad (valores típicos de la normativa argentina, se pueden cambiar; aclarar siempre que no reemplaza la
-  habilitación del municipio).
+  habilitación del municipio). Se editan en la pestaña Seguridad del panel.
+- `geo.zonaHoraria`: horas respecto de UTC (por defecto −3, Argentina). La usan el sol y las sombras.
+- `sonido.ganancia`: dB que se suman o restan a todos los equipos (los dB del fabricante son el máximo).
+- `vistas[]`: `lado` es `frente`, `costado`, `fondo` u `otro-costado`; `referencia` = id del objeto que da la
+  dirección (si falta, el primero); `escala` (denominador, por ejemplo 50) y `persona: false` (sin silueta de escala)
+  son opcionales. Cada vista sale como una hoja del PDF del plano.
+- `fotosMapa[]`: `archivo` es el nombre de la foto en `fotos/<slug>/`, `pos` dónde se sacó y `mira` hacia dónde
+  (grados, 0 = hacia +y, 90 = hacia +x).
+- `presupuesto.extras[].monto` y `costo` de los objetos: números. Si vienen como texto, se entiende "80.000" como
+  ochenta mil (separador de miles), además de "80 mil", "1,5 M" y "$ 80.000".
+- `hoja`: además de las opciones del plano, cada hoja extra se prende con su clave: `hojaSonido`, `hojaEmergencia`,
+  `hojasVistas` (prendida por defecto), `hojaLogistica`, `hojasProveedores`, `hojaElectrica`, `hojaSombras`, `hojaTerreno`.
+
+## Checklist del armado (celular)
+
+- Se guarda aparte de la escena, en `escenas/.checklist/<slug>.json` (no va a git): `{ version, actualizado, estados }`,
+  con `estados[id] = { estado: "llego" | "armado" | "problema", hora, quien, nota, foto }`.
+- `GET /api/checklist/:slug` lo lee y `PATCH /api/checklist/:slug` con `{ id, estado?, quien?, nota?, foto? }` cambia uno.
+  Cada cambio avisa por SSE (`{ tipo: "checklist", slug }`).
+- Para usarlo desde el celular el servidor tiene que estar abierto para la red (`abrir-red.bat` o `--red`).
+  `GET /api/red` devuelve `{ red, direcciones }` y la app arma el QR con la primera dirección.
 
 ## Plano (`plano2d.js`)
 

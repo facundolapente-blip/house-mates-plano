@@ -6,7 +6,7 @@ Claude escribe o edita `escenas/<slug>.json` → la app abierta en el navegador 
 
 ## Correr
 
-- `node server.mjs` (o `abrir.bat` en Windows, que además abre el navegador). Puerto 5178 (`--puerto=xxxx` o `PUERTO=xxxx`
+- `node server.mjs` (o `abrir-oculto.vbs`, sin ventana, o `abrir.bat` en Windows; los dos abren el navegador; `abrir-red.bat` = con `--red`). Puerto 5178 (`--puerto=xxxx` o `PUERTO=xxxx`
   lo cambia). Escucha solo en esta computadora (127.0.0.1); con `--red` (o `RED=1`) se abre a la red local para verlo
   desde el celular, y muestra las direcciones. Rechaza pedidos con otro Host u Origin.
 - Respaldos automáticos: antes de pisar una escena guarda la versión anterior en `escenas/.respaldos/<slug>/` con la
@@ -29,7 +29,13 @@ Claude escribe o edita `escenas/<slug>.json` → la app abierta en el navegador 
 
 - Identidad de House Mates: base #0A0A0A / #FAFAFA, General Sans, acento azul #2447F5, violeta #8A4FFF,
   cálido #E8AA4C solo para medidas (cinta métrica). Rojo #FF3B30 solo para errores. Tema oscuro por defecto y claro opcional.
-- Vistas: 3D (con "Caminar"), Planta, Plano (hojas para imprimir) y Materiales (listado). Atajos 1 a 4.
+- Vistas: 3D (con "Caminar"), Planta, Plano (hojas para imprimir), Materiales (listado) y Producción (cronograma,
+  proveedores, staff, presupuesto, comparar variantes). Atajos 1 a 5.
+- Panel derecho sin selección: pestañas Proyecto (datos, fondo y escala, checklist con QR, historial), Seguridad
+  (salidas, distancias, servicios) y Técnica (sonido, energía, cargas, sol, terreno). Las capas de análisis se pintan
+  sobre el piso (`estado.analisis`: sombras, terreno, electrico, sonido, distancias).
+- Dibujo a pedido: la vista 3D solo se dibuja cuando algo cambia (`pedirRender`, `cambioEscena`). Todo lo que cambie la
+  escena fuera de un clic, tecla o campo tiene que llamar a una de las dos.
 - Herramientas (barra flotante a la izquierda): seleccionar (V), mano (H o espacio), medir (M), cota fija (C), zona (Z).
 - Selección múltiple: Shift+clic, recuadro en planta (en 3D con Shift), Ctrl+A. Con varios: alinear, distribuir,
   repetir en filas y columnas, copiar y pegar (también entre escenas), mover en grupo.
@@ -48,6 +54,17 @@ Claude escribe o edita `escenas/<slug>.json` → la app abierta en el navegador 
 - `public/js/iconos.js`: íconos de línea de la interfaz y de cada tipo de objeto.
 - `public/js/formato.js`: formateo del JSON (un objeto por renglón, hasta 170 caracteres) y normalización.
 - `public/js/geometria.js`: geometría en planta (rectángulos girados, distancias, superficie libre).
+- `public/js/tipos-datos.js`: los datos de cada tipo (medidas, categoría, cómputo) sin Three.js, para usar en Node.
+- `public/js/predio.js` y `geo.js`: estacionamientos, caminos, vallado; coordenadas y calibración con Google Maps.
+- `public/js/seguridad.js`, `sonido.js`, `electrico.js`, `cargas.js`, `sol.js`, `terreno.js`: análisis (HTML del panel,
+  capa sobre el piso y hoja extra del plano).
+- `public/js/produccion.js`: vista de producción (HTML, edición con `data-prod`, acciones con `data-prod-accion`) y sus hojas.
+- `public/js/elevacion.js`: vistas de frente con alturas. `mapa-publico.js` (+ `qr.js`): mapa para el público.
+- `public/js/compartir.js` y `visor/`: visor de un solo archivo para WhatsApp. `kml.js`, `dxf.js`: Google Earth y AutoCAD.
+- `public/checklist.html` + `js/checklist.js` + `js/checklist-datos.js`: checklist del armado en el celular;
+  `servidor/checklist.mjs` lo guarda en `escenas/.checklist/`.
+- `servidor/`: configuración (`config.json`), cierre automático, historial con git y copia a OneDrive.
+- `scripts/armar-sitio.mjs`: arma `_site/` para la versión de muestra en Vercel (sin servidor, no guarda cambios).
 - `escenas/*.json`: una escena por lugar o por variante de distribución.
 - `fotos/<slug>/`: fotos de referencia de cada escena (las sube el usuario desde la app o las copia a mano).
 
