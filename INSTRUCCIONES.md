@@ -77,15 +77,32 @@ Claude crea la escena en `escenas/` y la ves aparecer en el navegador. Si despu�
 **Herramientas** (barra flotante a la izquierda de la vista): seleccionar (V), mano (H o espacio), medir (M), cota fija
 (C), zona (Z) y las de dibujo libre (zonas de cualquier forma, caminos, vallado).
 
-**Biblioteca** (pestaña de la izquierda): arrastrá un objeto hasta la vista o hacé clic para ponerlo en el centro.
-También está tu catálogo propio de equipos y los bloques (por ejemplo, la cabina House Mates entera).
+**Biblioteca** (pestaña de la izquierda): arrastrá un objeto hasta la vista o hacé clic para ponerlo en el centro (si
+ahí ya hay algo, se corre a un lugar libre al lado). Arriba están los **armados listos**: barra bajo 2 gazebos, fila de
+6 baños químicos, entrada con seguridad, truss con 4 beams y 2 estrobos, y barras LED. También están tus equipos y tus
+bloques (por ejemplo, la cabina House Mates entera). Luces: cabezal móvil, **beam**, **estrobo LED (tipo Stormy)**,
+**barra LED**, tacho PAR; estructuras: **carpa** (12 × 15 m, 4 m de alto) y **gazebo** (3 × 3 m).
+
+**Buscar y hacer (Ctrl+K o la lupa de arriba)**: escribí "baño", "pista", "beam", "pdf" o "noche" y Enter. Sirve para
+agregar cualquier cosa, ir a un objeto de la escena, cambiar de vista, exportar o abrir otra escena.
+
+**Bloquear**: el candado del panel (o la tecla B) deja algo fijo para que no se mueva ni se borre sin querer. Se ve un
+candado en la lista. Con varios elegidos, el botón "Bloquear" los traba a todos.
+
+**Gente en la pista**: elegí una zona (la pista, por ejemplo) y tocá "Cómoda" o "Llena": aparece esa cantidad de gente
+en la vista para ver la escala real. También se puede escribir el número en "Gente en la vista".
 
 **Panel de la derecha**
 
 - Con un objeto elegido: posición y medidas exactas, modelo, proveedor, costo, consumo y notas. Con varios: alinear,
-  distribuir, repetir en filas y columnas. El botón **Vista de frente** arma una hoja con todas las alturas.
+  distribuir, repetir en filas y columnas. El botón **Vista de frente** arma una hoja con todas las alturas. Con dos
+  elegidos dice cuánto los separa y "Dejar la cota en el plano" la imprime.
 - Sin nada elegido, tres pestañas:
-  - **Proyecto**: datos del evento, fondo y escala, ubicación, checklist del armado (con el QR) e historial.
+  - **Proyecto**: datos del evento; **lo básico de la fiesta** (baños, luces, barra, carpa, ambulancia, generador,
+    límite del predio, seguridad y entrada de la gente: qué está y qué falta, con un botón para agregarlo y "Va / No va"
+    para la carpa y la ambulancia); **revisión del plano** (cosas que se pisan, salidas tapadas, el generador cerca del
+    público, lugares sin matafuego, la ambulancia lejos de un acceso, cuánto tarda en entrar la gente; con "Ver" y, para
+    los matafuegos, un botón que lo agrega); capacidad; fondo y escala; ubicación; checklist del armado (con el QR) e historial.
   - **Seguridad**: cuánta gente entra, ancho de salidas, distancia a la salida más cercana (se puede ver pintado en el
     piso), matafuegos, baños, barra, agua y primeros auxilios. Las reglas se pueden ajustar a lo que pida el municipio.
   - **Técnica**: sonido (cobertura y ruido a los vecinos), energía por tablero, peso colgado en cada truss, sol y sombra
@@ -121,6 +138,8 @@ Todo se guarda solo. Ctrl+Z deshace. Con ⋯ al lado del nombre de la escena pod
 | Ctrl+Z / Ctrl+Y | Deshacer / rehacer |
 | F | Encuadrar todo o la selección |
 | N | Modo noche |
+| B | Bloquear o destrabar lo elegido |
+| Ctrl+K | Buscar y hacer |
 | ? | Ver todos los atajos |
 
 ## Dónde queda cada cosa

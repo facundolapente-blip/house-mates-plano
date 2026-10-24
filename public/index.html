@@ -59,6 +59,7 @@
     </nav>
 
     <div class="barra-der">
+      <button id="btn-buscar" class="boton-icono" title="Buscar y hacer: agregar, ir a algo, exportar (Ctrl+K)" aria-label="Buscar y hacer" data-icono="buscar"></button>
       <button id="btn-caminar" class="boton-icono" aria-pressed="false" title="Caminar adentro" data-icono="caminar"></button>
       <button id="btn-noche" class="boton-icono" aria-pressed="false" title="Ver con luces de fiesta (N)" data-icono="luna"></button>
       <button id="btn-fotos" class="boton-icono" aria-pressed="false" title="Fotos del lugar" data-icono="foto"><span id="cuenta-fotos" class="burbuja"></span></button>
@@ -234,6 +235,7 @@
         <dt>F</dt><dd>Encuadrar todo o la selección</dd>
         <dt>N</dt><dd>Modo noche</dd>
         <dt>B</dt><dd>Bloquear o destrabar lo elegido</dd>
+        <dt>Ctrl+K</dt><dd>Buscar y hacer: agregar, ir a algo, exportar</dd>
       </dl>
       <dl class="atajos">
         <dt>Shift + clic</dt><dd>Sumar o sacar de la selección</dd>
@@ -321,6 +323,12 @@
   </dialog>
 
   <dialog id="dlg-foto" class="dlg-foto" aria-label="Foto ampliada"><img alt=""></dialog>
+
+  <dialog id="dlg-comandos" class="dlg-comandos" aria-label="Buscar y hacer">
+    <input id="comandos-texto" type="text" placeholder="Buscá un objeto, algo de la escena o una acción: baño, pista, pdf, noche…" autocomplete="off" spellcheck="false" role="combobox" aria-controls="comandos-lista" aria-expanded="true">
+    <ul id="comandos-lista" role="listbox"></ul>
+    <p class="ayuda">Enter elige · ↑ ↓ para moverte · Esc cierra</p>
+  </dialog>
 
   <dialog id="dlg-mapa" aria-labelledby="dlg-mapa-titulo" class="dlg-ancho dlg-mapa">
     <div class="dlg-mapa-cuerpo">

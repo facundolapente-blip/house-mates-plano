@@ -31,9 +31,14 @@ Claude escribe o edita `escenas/<slug>.json` → la app abierta en el navegador 
   cálido #E8AA4C solo para medidas (cinta métrica). Rojo #FF3B30 solo para errores. Tema oscuro por defecto y claro opcional.
 - Vistas: 3D (con "Caminar"), Planta, Plano (hojas para imprimir), Materiales (listado) y Producción (cronograma,
   proveedores, staff, presupuesto, comparar variantes). Atajos 1 a 5.
-- Panel derecho sin selección: pestañas Proyecto (datos, fondo y escala, checklist con QR, historial), Seguridad
-  (salidas, distancias, servicios) y Técnica (sonido, energía, cargas, sol, terreno). Las capas de análisis se pintan
-  sobre el piso (`estado.analisis`: sombras, terreno, electrico, sonido, distancias).
+- Panel derecho sin selección: pestañas Proyecto (datos, lo básico de la fiesta, revisión del plano, capacidad, fondo
+  y escala, checklist con QR, historial), Seguridad (salidas, distancias, servicios) y Técnica (sonido, energía, cargas,
+  sol, terreno). Las capas de análisis se pintan sobre el piso (`estado.analisis`: sombras, terreno, electrico, sonido,
+  distancias).
+- Biblioteca: además de los tipos, "Armados listos" (`ARMADOS` en `tipos-datos.js`: barra bajo 2 gazebos, fila de 6
+  baños, entrada con seguridad, truss con luces, barras LED). Lo que se agrega sin elegir punto se corre a un lugar
+  libre (`lugarLibre` en `revision.js`).
+- Ctrl+K: buscar y hacer (agregar, ir a un objeto, vistas, exportar, abrir otra escena). B: bloquear o destrabar.
 - Dibujo a pedido: la vista 3D solo se dibuja cuando algo cambia (`pedirRender`, `cambioEscena`). Todo lo que cambie la
   escena fuera de un clic, tecla o campo tiene que llamar a una de las dos.
 - Herramientas (barra flotante a la izquierda): seleccionar (V), mano (H o espacio), medir (M), cota fija (C), zona (Z).
@@ -60,6 +65,8 @@ Claude escribe o edita `escenas/<slug>.json` → la app abierta en el navegador 
   capa sobre el piso y hoja extra del plano).
 - `public/js/produccion.js`: vista de producción (HTML, edición con `data-prod`, acciones con `data-prod-accion`) y sus hojas.
 - `public/js/elevacion.js`: vistas de frente con alturas. `mapa-publico.js` (+ `qr.js`): mapa para el público.
+- `public/js/revision.js`: revisión del plano (cosas que se pisan, salidas tapadas, generador, matafuegos, ambulancia,
+  camino de emergencia, tiempo de ingreso), separación entre dos objetos y lugar libre para lo nuevo.
 - `public/js/compartir.js` y `visor/`: visor de un solo archivo para WhatsApp. `kml.js`, `dxf.js`: Google Earth y AutoCAD.
 - `public/checklist.html` + `js/checklist.js` + `js/checklist-datos.js`: checklist del armado en el celular;
   `servidor/checklist.mjs` lo guarda en `escenas/.checklist/`.
@@ -131,16 +138,24 @@ dejarlo escrito en `notas` (por ejemplo "esquina del fondo a la izquierda, miran
 - Tipos disponibles (ver `TIPOS` en `public/js/tipos.js` para medidas típicas): `columna`, `tarima`, `casita`
   (estructura a dos aguas; `alero` = fracción del alto donde terminan los postes verticales y arranca el techo,
   como una casa; sin `alero` es un triángulo hasta el piso y `tirante` ubica la viga horizontal; `techo: false` la
-  deja abierta, `luz` le pone LED al frente), `escalera`,
-  `cabina_dj`, `parlante`, `sub`, `luz` (cabezal móvil colgado), `par` (con `apunta: [x, y, altura]` ilumina un árbol
+  deja abierta, `luz` le pone LED al frente), `carpa` (por defecto 12 × 15 m y 4 m de alto, techo a dos aguas a lo
+  largo; de menos de 6 m de lado se dibuja como gazebo), `gazebo` (3 × 3 m, donde suele ir la barra; se usan dos juntos),
+  `escalera`,
+  `cabina_dj`, `parlante`, `sub`, `luz` (cabezal móvil colgado), `beam` (cabezal beam 230 7R: haz finito),
+  `estrobo` (estrobo LED tipo Clay Paky Stormy: titila en modo noche), `barra_led` (barra LED de 1 m: baña para arriba),
+  `par` (con `apunta: [x, y, altura]` ilumina un árbol
   desde abajo), `truss` (se orienta solo según el lado más largo; vertical si el alto es mayor), `pantalla` (también
   sirve para un neón), `poste_v` (poste de luz en V), `farol`, `barra`, `heladera`, `mesa`, `mesa_alta`, `silla`,
   `banqueta`, `sillon`, `bano_quimico`, `matafuego`, `planta`, `tela`, `arbol` (`dims` = copa y alto total;
   `tronco` = diámetro, que es lo único que cuenta como obstáculo; `forma: "redondo"` para copas bajas), `hilera`
-  (viñedo, cerco vivo), `zona` (rectángulo en el piso con m² y capacidad, alto 0), `etiqueta` (cartel), `persona`
-  (escala humana), `caja`, `cilindro` (genéricos para lo que no tenga tipo).
-- En modo noche, los `luz` y `par` proyectan haces (hasta 12 con luz real) y los `poste_v` y `farol` iluminan
-  alrededor (hasta 10; el resto solo brilla).
+  (viñedo, cerco vivo), `zona` (rectángulo en el piso con m² y capacidad, alto 0; `gente: 340` muestra esa cantidad de
+  personas en la vista, para ver la escala), `etiqueta` (cartel), `persona`
+  (escala humana), `caja`, `cilindro` (genéricos para lo que no tenga tipo). Son muchos más: ver `TIPOS_DATOS`
+  (ambulancia, generador, vallado, acceso, control_acceso, puesto de staff, etc.).
+- `carpa` y `gazebo` son "abiertas": no cuentan como obstáculo para la capacidad ni para caminar a una salida.
+- En modo noche, `luz`, `par`, `beam`, `estrobo` y `barra_led` proyectan haces (hasta 12 con luz real) y los `poste_v`
+  y `farol` iluminan alrededor (hasta 10; el resto solo brilla).
+- En la escena, `plan: { "ambulancia": true|false, "carpa": true|false }` guarda si va o no (panel "Lo básico de la fiesta").
 
 ### Proyecto, cotas, plano y cómputo
 

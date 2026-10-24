@@ -32,6 +32,11 @@ se puede recorrer y probar todo, pero los cambios no se guardan (la herramienta 
 - **Mapa para el público:** historia de Instagram, posteo o afiche A3 con la identidad de House Mates y QR de cómo llegar.
 - **Checklist del armado en el celular:** el equipo marca lo que llegó y lo que está armado escaneando un QR.
 - **Vistas de frente** con todas las alturas (la cabina, por ejemplo) y **fotos ubicadas en el mapa**.
+- **Lo básico de la fiesta y revisión del plano:** qué está y qué falta (baños, luces, barra, carpa, ambulancia,
+  generador, límite del predio, seguridad, entrada) y lo que conviene corregir (cosas que se pisan, salidas tapadas,
+  generador cerca del público, matafuegos, tiempo de ingreso), con botones para resolverlo.
+- **Armados listos** (barra bajo 2 gazebos, fila de baños, entrada con seguridad, truss con beams y estrobos), luces
+  beam, estrobo LED y barra LED, carpa de 12 × 15 m, gente simulada en la pista, bloqueo y buscador con Ctrl+K.
 - **Seguridad de los datos:** versiones anteriores para volver atrás, historial con git y copia en la nube (OneDrive).
 
 El detalle de cada función está en [HOJA-DE-RUTA.md](HOJA-DE-RUTA.md).

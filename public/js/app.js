@@ -25,6 +25,7 @@ import { hojasElevaciones, elevacionSVG, nuevaVista, vistaPorDefecto } from './e
 import { generarMapaPublico, FORMATOS as FORMATOS_MAPA, cargarFuentes, mapaAImagen } from './mapa-publico.js';
 import { htmlProduccion, aplicarEdicion, aplicarAccion, hojasProveedores, hojaLogistica, htmlResumenEstado, fechaHora as fechaHoraProd, resumenStaff } from './produccion.js';
 import { qrSVG } from './qr.js';
+import { revisarPlano, ingreso, separacion, lugarLibre } from './revision.js';
 import { itemsChecklist, progreso } from './checklist-datos.js';
 import {
   esquinas,
@@ -1862,6 +1863,11 @@ function agregar(tipo, punto = null) {
   if (tipo === 'puesto') Object.assign(o, { rol: 'seguridad', personas: 1 });
   if (tipo === 'texto') o.texto = 'Texto';
   if (tipo === 'senal') o.texto = 'Salida';
+  // Desde la biblioteca (sin un punto elegido): si en el centro ya hay algo, se corre a un lugar libre cerca.
+  if (!punto) {
+    const [dx, dy] = lugarLibre(estado.escena, [o]);
+    o.pos = [r3(o.pos[0] + dx), r3(o.pos[1] + dy)];
+  }
   antesDeCambiar();
   estado.escena.objetos.push(o);
   agregarObjeto3D(o);
@@ -2140,15 +2146,23 @@ const personas = (libre) => {
   return `${fm(Math.floor(libre * a), 0)} a ${fm(Math.floor(libre * b), 0)}`;
 };
 
-// Total del lugar: es la misma cuenta que usan Seguridad y Staff (capacidadDe en seguridad.js).
+// Capacidad del lugar (capacidadDe en seguridad.js), guardada mientras la escena no cambie: el panel se redibuja
+// seguido y la cuenta tarda unos 50 ms.
+let capacidadGuardada = { clave: null, valor: null };
+function capacidadMemo() {
+  if (capacidadGuardada.clave !== estado.ultimo) capacidadGuardada = { clave: estado.ultimo, valor: capacidadDe(estado.escena) };
+  return capacidadGuardada.valor;
+}
+
+// Total del lugar: es la misma cuenta que usan Seguridad y Staff.
 function htmlCapacidadTotal() {
   let cap;
   try {
-    cap = capacidadDe(estado.escena);
+    cap = capacidadMemo();
   } catch {
     return '';
   }
-  if (!(cap.llena > 0)) return '';
+  if (!cap || !(cap.llena > 0)) return '';
   const usa = cap.aforo !== null ? `Seguridad y Staff usan el aforo cargado: ${fm(cap.aforo, 0)} personas.` : `Sin aforo cargado, Seguridad y Staff usan el lugar lleno: ${fm(cap.llena, 0)} personas.`;
   return `
     <div class="cap-fila cap-total">
@@ -2496,6 +2510,18 @@ function valorComun(objs, f) {
   return objs.every((o) => f(o) === v) ? v : null;
 }
 
+// Con dos objetos elegidos: cuánto los separa (de borde a borde y de centro a centro).
+function htmlSeparacion(a, b) {
+  try {
+    const s = separacion(a, b);
+    return `<p class="dato separacion">${icono('medir')} <span>${s.bordes > 0 ? `<strong>${fm(s.bordes)} m</strong> entre bordes` : '<strong>Se tocan o se pisan</strong>'}, ${fm(s.centros)} m entre centros.</span></p>${
+      s.puntos ? `<div class="fila-botones compacta"><button data-basico="cota" title="Cota fija entre los dos bordes más cercanos: sale en el plano">${icono('cota')} Dejar la cota en el plano</button></div>` : ''
+    }`;
+  } catch {
+    return '';
+  }
+}
+
 function htmlMulti(objs) {
   const tipos = [...new Set(objs.map((o) => o.tipo))];
   return `
@@ -2503,7 +2529,8 @@ function htmlMulti(objs) {
       <span class="det-icono">${icono('repetir')}</span>
       <div class="titulo-fijo">${objs.length} objetos</div>
     </div>
-    <p class="dato">${tipos.length === 1 ? TIPOS[tipos[0]]?.nombre || tipos[0] : `${tipos.length} tipos distintos`}${objs.some((o) => o.fijo) ? '. Los fijos no se mueven.' : '.'}</p>
+    <p class="dato">${tipos.length === 1 ? TIPOS[tipos[0]]?.nombre || tipos[0] : `${tipos.length} tipos distintos`}${objs.some((o) => o.fijo) ? '. Los bloqueados no se mueven.' : '.'}</p>
+    ${objs.length === 2 ? htmlSeparacion(objs[0], objs[1]) : ''}
     <div class="fila-botones">
       ${new Set(objs.map((o) => o.grupo)).size === 1 && objs[0].grupo ? `<button data-accion="desagrupar" title="Ctrl+Shift+G">${icono('grupo')} Separar grupo</button>` : `<button data-accion="agrupar" title="Ctrl+G">${icono('grupo')} Agrupar</button>`}
       <button data-accion="a-bloque" title="Para soltarlo entero en cualquier escena">${icono('mas')} Guardar como bloque</button>
@@ -2606,6 +2633,7 @@ function htmlProyecto() {
       <label class="campo"><span>Notas</span><textarea data-escena="notas" rows="3" placeholder="Qué falta medir, contacto del lugar…">${esc(e.notas || '')}</textarea></label>`
     )}
     ${seccion('Lo básico de la fiesta', htmlBasicos())}
+    ${seccion(`Revisión del plano${revisionMemo().length ? ` (${revisionMemo().length})` : ''}`, htmlRevision(), { abierta: revisionMemo().length > 0 })}
     ${htmlFondo()}
     ${htmlUbicacion()}
     ${seccion(
@@ -3932,6 +3960,110 @@ function htmlFondoCAD() {
     <div class="fila-botones"><button data-accion="cad-mover">${icono('mano')} Mover</button><button class="peligro" data-accion="cad-quitar">${icono('basura')} Quitar</button></div>`;
 }
 
+/* ------------------------------------------------------------------ buscar y hacer (Ctrl+K) */
+
+// Un buscador para todo: agregar cualquier objeto o armado, ir a algo de la escena, cambiar de vista, exportar,
+// abrir otra escena. Se escribe una parte ("baño", "pista", "pdf") y Enter.
+const sinTildes = (s) =>
+  String(s || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+
+function irAlPanel(pestana) {
+  if (!enVista3D()) ponerVista('3d');
+  ponerSeleccion([]);
+  estado.pestanaDetalle = pestana;
+  renderDetalle();
+}
+
+function listaComandos() {
+  const lista = [];
+  const sumar = (grupo, texto, icon, hacer, extra = '') => lista.push({ grupo, texto, icono: icon, hacer, clave: sinTildes(`${texto} ${grupo} ${extra}`) });
+  for (const [v, t, i] of [
+    ['3d', 'Vista 3D', 'cubo'],
+    ['planta', 'Planta', 'planta'],
+    ['plano', 'Plano para imprimir', 'hoja'],
+    ['materiales', 'Listado de materiales', 'lista'],
+    ['produccion', 'Producción: cronograma, proveedores, presupuesto', 'produccion'],
+  ])
+    sumar('Ir a', t, i, () => ponerVista(v));
+  sumar('Ir a', 'Revisión del plano', 'check', () => {
+    irAlPanel('proyecto');
+    $('.revision, #panel-der .dato.ok')?.scrollIntoView({ block: 'center' });
+  }, 'revisar errores problemas');
+  sumar('Ir a', 'Lo básico de la fiesta', 'lista', () => irAlPanel('proyecto'), 'checklist faltan');
+  sumar('Ir a', 'Seguridad y salidas', 'acceso', () => irAlPanel('seguridad'), 'evacuacion matafuegos banos');
+  sumar('Ir a', 'Sonido, energía, cargas, sol y terreno', 'parlante', () => irAlPanel('tecnica'), 'tecnica electrico');
+  sumar('Hacer', estado.noche ? 'Modo día' : 'Modo noche (luces)', 'luna', () => ponerNoche(!estado.noche), 'noche dia');
+  sumar('Hacer', 'Bloquear o destrabar lo elegido', 'candado', alternarBloqueo, 'fijar candado');
+  sumar('Hacer', 'Encuadrar todo', 'encuadrar', () => encuadrar());
+  sumar('Exportar', 'Plano en PDF', 'pdf', () => exportar.pdf(), 'imprimir');
+  sumar('Exportar', 'Mapa para el público', 'mapa', () => exportar.mapa(), 'instagram historia afiche');
+  sumar('Exportar', 'Visor para WhatsApp', 'compartir', () => exportar.visor());
+  sumar('Exportar', 'Materiales en CSV (Excel)', 'tabla', () => exportar.csv(), 'planilla');
+  for (const a of ARMADOS) sumar('Agregar armado', a.nombre, a.icono, () => insertarBloque(a.id), a.detalle);
+  for (const [t, d] of Object.entries(TIPOS))
+    sumar('Agregar', d.nombre, t, () => {
+      if (!enVista3D()) ponerVista('3d');
+      agregar(t);
+    }, `${t} ${d.cat === 'luces' ? 'luz luces iluminacion' : d.cat}`);
+  for (const o of estado.escena?.objetos || [])
+    sumar('En la escena', o.nombre, o.tipo, () => {
+      if (!enVista3D()) ponerVista('3d');
+      ponerSeleccion([o.id]);
+      centrarEn(selObjs());
+    }, `${TIPOS[o.tipo]?.nombre || ''} ${o.ref || ''} ${o.proveedor || ''}`);
+  for (const x of listaEscenas) if (x.slug !== estado.slug) sumar('Abrir escena', x.nombre || x.slug, 'hoja', () => abrirEscena(x.slug));
+  return lista;
+}
+
+let comandos = [];
+let comandosVisibles = [];
+let comandoActivo = 0;
+
+function filtrarComandos() {
+  const q = sinTildes($('#comandos-texto').value).trim();
+  const palabras = q.split(/\s+/).filter(Boolean);
+  const orden = { 'Ir a': 0, Hacer: 0, 'Agregar armado': 1, Agregar: 1, 'En la escena': 2, Exportar: 3, 'Abrir escena': 4 };
+  // Como mucho unos pocos de cada grupo, así con "baño" aparecen los de la escena y también agregar uno.
+  const tope = { 'En la escena': 6, Agregar: 5, 'Agregar armado': 3 };
+  const usados = {};
+  comandosVisibles = (palabras.length ? comandos.filter((c) => palabras.every((p) => c.clave.includes(p))) : comandos.filter((c) => c.grupo !== 'Agregar' && c.grupo !== 'En la escena'))
+    .map((c) => ({ c, empieza: palabras.length && sinTildes(c.texto).startsWith(palabras[0]) ? 0 : 1 }))
+    .sort((a, b) => (orden[a.c.grupo] ?? 5) - (orden[b.c.grupo] ?? 5) || a.empieza - b.empieza)
+    .filter(({ c }) => (usados[c.grupo] = (usados[c.grupo] || 0) + 1) <= (tope[c.grupo] ?? 99))
+    .slice(0, 16)
+    .map((x) => x.c);
+  comandoActivo = Math.min(comandoActivo, Math.max(0, comandosVisibles.length - 1));
+  $('#comandos-lista').innerHTML = comandosVisibles.length
+    ? comandosVisibles
+        .map((c, i) => `<li role="option" data-comando="${i}" aria-selected="${i === comandoActivo}">${icono(c.icono)}<span>${esc(c.texto)}</span><small>${esc(c.grupo)}</small></li>`)
+        .join('')
+    : '<li class="vacio">No encontré nada con eso.</li>';
+}
+
+function abrirComandos() {
+  comandos = listaComandos();
+  comandoActivo = 0;
+  $('#comandos-texto').value = '';
+  $('#dlg-comandos').showModal();
+  filtrarComandos();
+  $('#comandos-texto').focus();
+}
+
+function ejecutarComando(i) {
+  const c = comandosVisibles[i];
+  if (!c) return;
+  $('#dlg-comandos').close();
+  try {
+    c.hacer();
+  } catch (err) {
+    console.error(err);
+    aviso(`No se pudo: ${err.message}`, 'error');
+  }
+}
+
 /* ------------------------------------------------------------------ bloquear */
 
 // Bloquea o destraba lo elegido (todo junto: si hay alguno suelto, bloquea todos).
@@ -4006,19 +4138,60 @@ function htmlBasicos() {
 
   const puestos = objs.filter((o) => o.tipo === 'puesto' && (o.rol || 'seguridad') === 'seguridad');
   const gente = puestos.reduce((s, o) => s + (Number(o.personas) || 1), 0);
+  // La misma cuenta que Staff: 1 de seguridad cada 100 personas (o lo cargado), con el aforo o el lugar lleno.
   let recomendado = null;
   try {
-    recomendado = resumenStaff(e).seguridad.recomendado;
+    const cap = capacidadMemo();
+    const porSeguridad = Number(e.servicios?.personasPorSeguridad) > 0 ? Number(e.servicios.personasPorSeguridad) : 100;
+    if (cap?.personas > 0) recomendado = Math.ceil(cap.personas / porSeguridad);
   } catch {}
   const textoSeg = `${puestos.length ? `${plural(gente, 'persona', 'personas')} en ${plural(puestos.length, 'puesto', 'puestos')}` : 'Sin puestos'}${recomendado ? ` (se recomiendan ${fm(recomendado, 0)})` : ''}`;
   filas.push(fila('puesto', 'Seguridad', textoSeg, puestos.length > 0 && (!recomendado || gente >= recomendado), ver(puestos) + boton('agregar:puesto', 'Agregar puesto')));
 
   const accesos = de('acceso');
   const caminos = objs.filter((o) => o.tipo === 'camino' && (o.uso || 'publico') === 'publico');
-  const textoEntrada = `${accesos.length ? plural(accesos.length, 'acceso', 'accesos') : 'Sin acceso marcado'}, ${caminos.length ? `camino de ${fm(caminos.reduce((s, o) => s + largoDe(o), 0), 0)} m` : 'sin camino'}`;
+  let textoIngreso = '';
+  try {
+    const cap = capacidadMemo();
+    const ing = ingreso(e, cap?.personas);
+    if (ing) textoIngreso = `. Con ${plural(ing.carriles, 'carril', 'carriles')} de control entran ${fm(cap.personas, 0)} personas en unos ${fm(ing.minutos, 0)} min`;
+  } catch {}
+  const textoEntrada = `${accesos.length ? plural(accesos.length, 'acceso', 'accesos') : 'Sin acceso marcado'}, ${caminos.length ? `camino de ${fm(caminos.reduce((s, o) => s + largoDe(o), 0), 0)} m` : 'sin camino'}${textoIngreso}`;
   filas.push(fila('acceso', 'Entrada de la gente', textoEntrada, accesos.length > 0 && caminos.length > 0, ver([...accesos, ...caminos]) + boton('armado:armado-entrada', 'Agregar entrada') + boton('trazar:camino', 'Dibujar el camino')));
 
   return `<div class="basicos">${filas.join('')}</div><p class="ayuda">Lo que se agrega aparece en el centro de la vista: arrastralo a su lugar. Los armados quedan agrupados.</p>`;
+}
+
+// Revisión del plano (revision.js), guardada mientras la escena no cambie.
+let revisionGuardada = { clave: null, valor: [] };
+function revisionMemo() {
+  if (revisionGuardada.clave !== estado.ultimo) {
+    let personas = null;
+    try {
+      personas = capacidadMemo()?.personas || null;
+    } catch {}
+    let valor = [];
+    try {
+      valor = revisarPlano(estado.escena, { personas });
+    } catch (err) {
+      console.error(err);
+    }
+    revisionGuardada = { clave: estado.ultimo, valor };
+  }
+  return revisionGuardada.valor;
+}
+
+function htmlRevision() {
+  const avisos = revisionMemo();
+  if (!avisos.length) {
+    return `<p class="dato ok">${icono('check')} No encontré nada para corregir.</p><p class="ayuda">Reviso que nada se pise, que las salidas estén libres, el generador, los matafuegos, la ambulancia, el camino de emergencia y cuánto tarda en entrar la gente.</p>`;
+  }
+  return `<ul class="revision">${avisos
+    .map(
+      (a) =>
+        `<li class="revision-item ${a.nivel === 'atencion' ? 'atencion' : 'info'}"><span>${esc(a.texto)}</span>${a.arreglo?.accion === 'matafuego' ? `<button class="mini-texto" data-basico="matafuego:${esc(a.arreglo.id)}" title="Pone un matafuego al costado">${icono('mas')} Matafuego</button>` : ''}${a.ids.length ? `<button class="mini-texto" data-basico="ver:${esc(a.ids.join(','))}">Ver</button>` : ''}</li>`
+    )
+    .join('')}</ul><p class="ayuda">Es una guía para no olvidarse de nada: no reemplaza la habilitación.</p>`;
 }
 
 function accionBasico(accion) {
@@ -4029,6 +4202,23 @@ function accionBasico(accion) {
     return centrarEn(selObjs());
   }
   if (cmd === 'agregar') return agregar(valor);
+  if (cmd === 'matafuego') {
+    // Al costado del objeto (a la derecha de su frente), a medio metro del borde.
+    const o = objPorId(valor);
+    if (!o) return;
+    const t = ((o.rot || 0) * Math.PI) / 180;
+    const lx = o.dims[0] / 2 + 0.5;
+    const ly = o.dims[1] / 2;
+    agregar('matafuego', [o.pos[0] + lx * Math.cos(t) - ly * Math.sin(t), o.pos[1] + lx * Math.sin(t) + ly * Math.cos(t)]);
+    return aviso(`Matafuego al lado de «${o.nombre}». Arrastralo si tiene que ir en otro lugar.`);
+  }
+  if (cmd === 'cota') {
+    const [a, b] = selObjs();
+    const s = a && b ? separacion(a, b) : null;
+    if (!s?.puntos) return aviso('Se tocan: no hay distancia para acotar.', 'error');
+    crearCota(s.puntos[0], s.puntos[1]);
+    return aviso('Cota agregada: se ve en el 3D y sale en el plano impreso.');
+  }
   if (cmd === 'armado') return insertarBloque(valor);
   if (cmd === 'trazar') {
     if (!enVista3D()) ponerVista('planta');
@@ -4045,7 +4235,22 @@ function accionBasico(accion) {
 
 /* ------------------------------------------------------------------ checklist en el celular */
 
-async function cargarEstadoChecklist() {
+// Pedidos al servidor que no cambian a cada rato: se guardan unos segundos, así no se repiten cada vez que se
+// redibuja el panel (pasa al elegir un objeto o al escribir en un campo).
+const cachePedidos = new Map();
+function pedirJSON(url, segundos = 15, forzar = false) {
+  const c = cachePedidos.get(url);
+  if (!forzar && c && performance.now() - c.t < segundos * 1000) return c.p;
+  const p = fetch(url, { cache: 'no-store' }).then((r) => {
+    if (!r.ok) throw new Error(String(r.status));
+    return r.json();
+  });
+  cachePedidos.set(url, { t: performance.now(), p });
+  p.catch(() => cachePedidos.delete(url));
+  return p;
+}
+
+async function cargarEstadoChecklist(forzar = false) {
   const cont = $('#estado-checklist');
   if (!cont) return;
   if (muestra) {
@@ -4053,7 +4258,8 @@ async function cargarEstadoChecklist() {
     return;
   }
   try {
-    const [red, ch] = await Promise.all([fetch('/api/red').then((r) => r.json()), fetch(`/api/checklist/${estado.slug}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { estados: {} }))]);
+    const [red, ch] = await Promise.all([pedirJSON('/api/red', 3600), pedirJSON(`/api/checklist/${encodeURIComponent(estado.slug)}`, 20, forzar).catch(() => ({ estados: {} }))]);
+    if (!cont.isConnected) return;
     const items = itemsChecklist(estado.escena).flatMap((sec) => sec.items);
     const p = progreso(items, ch.estados || {});
     let html = `<p class="dato"><strong>${fm(p.porcentaje, 0)} %</strong> listo: ${p.armado} armados, ${p.llego} llegaron, ${p.problema} con problemas, de ${p.total}.</p>`;
@@ -4297,10 +4503,13 @@ async function cerrarApp() {
 async function cargarEstadoHistorial() {
   const cont = $('#estado-historial');
   if (!cont) return;
+  if (muestra) {
+    cont.innerHTML = '<p class="ayuda">En la versión de muestra no se guardan cambios ni hay historial. En la compu, cada cambio queda en el historial y en la copia de la nube.</p>';
+    return;
+  }
   try {
-    const r = await fetch('/api/historial', { cache: 'no-store' });
-    if (!r.ok) throw new Error();
-    const h = await r.json();
+    const h = await pedirJSON('/api/historial', 20);
+    if (!cont.isConnected) return;
     const fecha = (f) => (f ? new Date(f).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) : '');
     const git = h.git?.activo
       ? h.git.ultimoCommit
@@ -4394,6 +4603,10 @@ function agregarDesdeCatalogo(id, punto = null) {
   const c = catalogo.find((x) => x.id === id);
   if (!c || !estado.escena) return;
   const o = nuevoDesdeFicha(c, punto || centroDeVista(), { nombre: nombreUnico(c.nombre) });
+  if (!punto) {
+    const [dx, dy] = lugarLibre(estado.escena, [o]);
+    o.pos = [r3(o.pos[0] + dx), r3(o.pos[1] + dy)];
+  }
   insertar([o]);
 }
 
@@ -4429,6 +4642,11 @@ function insertarBloque(id, punto = null) {
     usados.add(nombre);
     return { ...o, id: nuevoId(), nombre, grupo, pos: [r3(o.pos[0] + ajustar(x)), r3(o.pos[1] + ajustar(y))] };
   });
+  // Sin un punto elegido (clic en la biblioteca): si en el centro ya hay algo, el armado se corre a un lugar libre.
+  if (!punto) {
+    const [dx, dy] = lugarLibre(estado.escena, copias);
+    for (const c of copias) c.pos = [r3(c.pos[0] + dx), r3(c.pos[1] + dy)];
+  }
   insertar(copias);
   aviso(`"${bl.nombre}" agregado: ${copias.length} objetos agrupados. Se mueven juntos; para separarlos, Ctrl+Shift+G.`);
 }
@@ -5272,6 +5490,33 @@ function conectarInterfaz() {
     }
   });
 
+  // Buscar y hacer (Ctrl+K).
+  $('#comandos-texto').addEventListener('input', () => {
+    comandoActivo = 0;
+    filtrarComandos();
+  });
+  $('#comandos-texto').addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const n = comandosVisibles.length;
+      if (!n) return;
+      comandoActivo = (comandoActivo + (e.key === 'ArrowDown' ? 1 : -1) + n) % n;
+      filtrarComandos();
+      $('#comandos-lista [aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      ejecutarComando(comandoActivo);
+    }
+  });
+  $('#comandos-lista').addEventListener('click', (e) => {
+    const li = e.target.closest('[data-comando]');
+    if (li) ejecutarComando(Number(li.dataset.comando));
+  });
+  $('#dlg-comandos').addEventListener('click', (e) => {
+    if (e.target === $('#dlg-comandos')) $('#dlg-comandos').close();
+  });
+  $('#btn-buscar')?.addEventListener('click', abrirComandos);
+
   // Mapa para el público.
   for (const id of ['#mapa-formato', '#mapa-tema', '#mapa-orientacion']) $(id).addEventListener('change', dibujarMapaPublico);
   for (const id of ['#mapa-titulo', '#mapa-subtitulo']) $(id).addEventListener('change', dibujarMapaPublico);
@@ -5769,6 +6014,11 @@ function conectarInterfaz() {
   // Teclado
   window.addEventListener('keydown', (e) => {
     teclas.add(e.code);
+    // Ctrl+K: buscar y hacer (anda aunque se esté escribiendo en otro campo).
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && estado.escena && !$('#dlg-comandos').open) {
+      e.preventDefault();
+      return abrirComandos();
+    }
     if (e.target.closest?.('input, textarea, select, dialog')) {
       if (e.key === 'Escape' && !e.target.closest('dialog')) e.target.blur();
       return;
@@ -5884,7 +6134,7 @@ function conectarEventos() {
     if (d.tipo === 'lista' || d.nueva) await cargarLista();
     if (d.tipo === 'datos') cargarDatosGenerales();
     if (d.tipo === 'cerrado') document.documentElement.classList.add('cerrado');
-    if (d.tipo === 'checklist' && d.slug === estado.slug && $('#estado-checklist')) cargarEstadoChecklist();
+    if (d.tipo === 'checklist' && d.slug === estado.slug && $('#estado-checklist')) cargarEstadoChecklist(true);
     if (d.tipo === 'escena' && d.slug === estado.slug) await recargarDesdeArchivo();
     if (d.tipo === 'error' && d.slug === estado.slug) aviso(`El archivo escenas/${d.slug}.json tiene un error de formato y no se cargó: ${d.mensaje}`, 'error', 9000);
   };

@@ -110,6 +110,12 @@ Tipos nuevos: `carpa`, `generador`, `tablero`, `foodtruck`, `agua`, `guardarropa
   esa unidad (valores típicos de la normativa argentina, se pueden cambiar; aclarar siempre que no reemplaza la
   habilitación del municipio). Se editan en la pestaña Seguridad del panel.
 - `geo.zonaHoraria`: horas respecto de UTC (por defecto −3, Argentina). La usan el sol y las sombras.
+- `plan`: `{ "ambulancia": true|false, "carpa": true|false }`, lo que se decidió que va o no va (sin el campo, todavía
+  no se definió).
+- En una `zona`, `gente`: cuántas personas se dibujan en la vista para ver la escala (como mucho 4 por m² y 5.000).
+- `servicios.personasPorSeguridad` (100 por defecto) y `servicios.personasPorMinutoCarril` (8 por defecto: cuántas
+  personas pasa cada carril de control de acceso por minuto, para el tiempo de ingreso).
+- Tipos nuevos: `beam`, `estrobo`, `barra_led`, `gazebo`; `carpa` ahora es de 12 × 15 × 4 m por defecto.
 - `sonido.ganancia`: dB que se suman o restan a todos los equipos (los dB del fabricante son el máximo).
 - `vistas[]`: `lado` es `frente`, `costado`, `fondo` u `otro-costado`; `referencia` = id del objeto que da la
   dirección (si falta, el primero); `escala` (denominador, por ejemplo 50) y `persona: false` (sin silueta de escala)
