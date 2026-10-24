@@ -23,7 +23,7 @@ import { crearVisorHTML, nombreArchivoVisor, materialesHTML } from './compartir.
 import { analizarSalidas, analizarServicios, capacidadDe, htmlSeguridad, mapaDistancias, colorearDistancias, hojaEmergencia, opcionesSeguridad, opcionesServicios, CSS_SEGURIDAD } from './seguridad.js';
 import { hojasElevaciones, elevacionSVG, nuevaVista, vistaPorDefecto } from './elevacion.js';
 import { generarMapaPublico, FORMATOS as FORMATOS_MAPA, cargarFuentes, mapaAImagen } from './mapa-publico.js';
-import { htmlProduccion, aplicarEdicion, aplicarAccion, hojasProveedores, hojaLogistica, htmlResumenEstado, fechaHora as fechaHoraProd } from './produccion.js';
+import { htmlProduccion, aplicarEdicion, aplicarAccion, hojasProveedores, hojaLogistica, htmlResumenEstado, fechaHora as fechaHoraProd, resumenStaff } from './produccion.js';
 import { qrSVG } from './qr.js';
 import { itemsChecklist, progreso } from './checklist-datos.js';
 import {
@@ -48,7 +48,7 @@ import { computar, csvComputo, nombreCategoria, computaPorDefecto, incluido, opc
 import { generarHojas, opcionesHoja, PAPELES, ESCALAS, escalaAuto, rotuloSuperficie, hojaPlanta } from './plano2d.js';
 import { plazasEstacionamiento, USOS_CAMINO, VEHICULOS, largoDe, textoTiempo, modulosVallado, moduloVallado, lineaLocal, medidasCochera } from './predio.js';
 import { leerCoordenadas, textoCoordenadas, tieneGeo, escenaAGeo, geoAEscena, calibrarConCoordenadas, enlaceGoogleMaps, distanciaReal } from './geo.js';
-import { ROLES_STAFF, TIPOS_DATOS } from './tipos-datos.js';
+import { ROLES_STAFF, TIPOS_DATOS, ARMADOS, LUCES } from './tipos-datos.js';
 import { descargarBlob, descargarTexto, pdfDeHojas } from './exportar.js';
 
 window.planoListo = true;
@@ -572,15 +572,22 @@ function construirLuces() {
       }
       continue;
     }
-    const cabeza = g.localToWorld(new THREE.Vector3(0, o.dims[2] * 0.4, 0));
+    // De dónde sale el haz: la cabeza (cabezales, beams, tachos), el frente (estrobo) o la tira de arriba (barra LED).
+    const [, p0, h0] = o.dims;
+    const origen = def.haciaArriba ? new THREE.Vector3(0, h0, 0) : o.tipo === 'estrobo' ? new THREE.Vector3(0, h0 * 0.55, p0 / 2) : new THREE.Vector3(0, h0 * 0.4, 0);
+    const cabeza = g.localToWorld(origen);
     // "apunta": [x, y] en el piso, o [x, y, altura] (por ejemplo, para iluminar un árbol desde abajo).
     const objetivo = Array.isArray(o.apunta)
       ? new THREE.Vector3(o.apunta[0], o.apunta[2] ?? 0, o.apunta[1])
-      : g.localToWorld(new THREE.Vector3(0, -(o.elev || 0), Math.max(1.5, (o.elev || 0) * 0.7)));
-    const apertura = THREE.MathUtils.degToRad(o.apertura || 11);
+      : def.haciaArriba
+        ? g.localToWorld(new THREE.Vector3(0, h0 + 4, 1.2))
+        : g.localToWorld(new THREE.Vector3(0, -(o.elev || 0), Math.max(1.5, (o.elev || 0) * 0.7)));
+    const apertura = THREE.MathUtils.degToRad(o.apertura || def.apertura || 11);
+    // Los haces finitos (beams) se ven más intensos.
+    const opacidad = apertura < 0.1 ? 0.55 : 0.26;
     const haz = new THREE.Mesh(
       geoHaz,
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.26, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, vertexColors: true })
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: opacidad, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, vertexColors: true })
     );
     haz.userData.propio = true;
     haz.raycast = () => {};
@@ -592,7 +599,8 @@ function construirLuces() {
       lucesG.add(foco, foco.target);
       focos++;
     }
-    haces.push({ haz, foco, cabeza, objetivo, apertura, fase: haces.length * 1.7 });
+    // El estrobo y la barra LED no se mueven; el estrobo titila.
+    haces.push({ haz, foco, cabeza, objetivo, apertura, fase: haces.length * 1.7, fijo: Boolean(def.destello || def.haciaArriba), destello: Boolean(def.destello), opacidad });
   }
   posicionarHaces(reloj.elapsedTime);
 }
@@ -603,9 +611,15 @@ const ABAJO = new THREE.Vector3(0, -1, 0);
 function posicionarHaces(t) {
   for (const h of haces) {
     _obj.copy(h.objetivo);
-    if (!reducirMovimiento) {
+    if (!reducirMovimiento && !h.fijo) {
       _obj.x += Math.sin(t * 0.5 + h.fase) * 1.1;
       _obj.z += Math.cos(t * 0.37 + h.fase * 1.3) * 0.8;
+    }
+    // Estrobo: un destello corto cada medio segundo (con "reducir movimiento" del sistema, luz quieta y suave).
+    if (h.destello) {
+      const prendido = reducirMovimiento || (t * 2 + h.fase) % 1 < 0.12;
+      h.haz.material.opacity = reducirMovimiento ? 0.12 : prendido ? 0.34 : 0;
+      if (h.foco) h.foco.intensity = prendido ? (reducirMovimiento ? 15 : 60) : 0;
     }
     _dir.subVectors(_obj, h.cabeza);
     const largo = _dir.length();
@@ -1098,6 +1112,7 @@ function ponerHerramienta(h) {
 }
 
 let arrastre = null;
+let intentoBloqueado = null;
 let caja = null;
 let presion = null;
 
@@ -1202,7 +1217,12 @@ visor.addEventListener(
     }
     if (!estado.sel.has(hit.id)) ponerSeleccion(idsDelGrupo(hit.id));
     const o = objPorId(hit.id);
-    if (!o || o.fijo) return;
+    if (!o) return;
+    // Bloqueado: no se mueve. Si igual se arrastra, se avisa cómo destrabarlo.
+    if (o.fijo) {
+      intentoBloqueado = { x: e.clientX, y: e.clientY };
+      return;
+    }
     const moviles = selObjs().filter((x) => !x.fijo);
     e.stopPropagation();
     arrastre = {
@@ -1221,6 +1241,10 @@ visor.addEventListener(
 
 const _p = new THREE.Vector3();
 visor.addEventListener('pointermove', (e) => {
+  if (intentoBloqueado && e.buttons && Math.hypot(e.clientX - intentoBloqueado.x, e.clientY - intentoBloqueado.y) > 8) {
+    intentoBloqueado = null;
+    aviso('Está bloqueado y no se mueve. Para moverlo, tocá el candado en el panel o apretá B.');
+  }
   if (editVertice) return moverVertice(e);
   if (trazo && e.target === renderer.domElement) {
     trazo.cursor = puntoDeTrazo(e);
@@ -1300,6 +1324,7 @@ function marcarHover(id) {
 }
 
 visor.addEventListener('pointerup', (e) => {
+  intentoBloqueado = null;
   const soltar = () => {
     try {
       visor.releasePointerCapture(e.pointerId);
@@ -2091,7 +2116,7 @@ function calcularCapacidad() {
   const e = estado.escena;
   if (!e) return;
   // Los vallados no se cuentan acá: su rectángulo no es lo que ocupan (son una línea).
-  const obstaculos = e.objetos.filter((o) => !defDe(o).piso && !esLinea(o) && o.tipo !== 'persona' && (o.elev || 0) < 1 && o.dims[2] > 0.05).map(huella);
+  const obstaculos = e.objetos.filter((o) => !defDe(o).piso && !defDe(o).abierta && !esLinea(o) && o.tipo !== 'persona' && (o.elev || 0) < 1 && o.dims[2] > 0.05).map(huella);
   const areas = e.areas
     .filter((a) => a.contorno.length >= 3)
     .map((a) => ({ id: a.id, nombre: a.nombre || a.id, total: Math.abs(areaFirmada(a.contorno)), libre: superficieLibre((x, y) => puntoEnPoligono(x, y, a.contorno), cajaDe(a.contorno), obstaculos).libre }));
@@ -2145,6 +2170,24 @@ function htmlCapacidad() {
   return htmlCapacidadTotal() + zonas.map(fila).join('') + areas.map(fila).join('');
 }
 
+// Gente simulada en una zona: botones para llenarla cómoda o llena (con la misma densidad de la capacidad).
+function gentePara(o) {
+  const z = estado.capacidad?.zonas?.find((x) => x.id === o.id);
+  const libre = z ? z.libre : superficieDe(o);
+  const [a, b] = densidad();
+  return { comoda: Math.floor(libre * a), llena: Math.floor(libre * b) };
+}
+
+function htmlBotonesGente(o) {
+  const g = gentePara(o);
+  if (!g.llena) return '';
+  return `<div class="fila-botones compacta" title="Pone gente en la vista para ver la escala real (no cambia ninguna cuenta)">
+    <button data-accion="gente:comoda">${icono('persona')} Cómoda (${fm(g.comoda, 0)})</button>
+    <button data-accion="gente:llena">${icono('persona')} Llena (${fm(g.llena, 0)})</button>
+    ${Number(o.gente) > 0 ? '<button data-accion="gente:0">Sacar la gente</button>' : ''}
+  </div>`;
+}
+
 function htmlDatoZona(o) {
   if (!o || o.tipo !== 'zona') return '';
   const z = estado.capacidad.zonas.find((x) => x.id === o.id);
@@ -2190,7 +2233,7 @@ function renderLista() {
           .get(c)
           .map(
             (o) =>
-              `<li><button class="item" data-id="${esc(o.id)}"${estado.sel.has(o.id) ? ' aria-current="true"' : ''}>${icono(o.tipo)}<span class="item-nombre">${esc(o.nombre)}</span>${o.estimado ? `<span class="marca-estimado" title="Medida estimada">≈</span>` : ''}${o.grupo ? icono('grupo', 'fijo') : ''}${capaDe(o) ? `<span class="punto-capa" style="background:${esc(capaDe(o).color)}" title="Capa ${esc(capaDe(o).nombre)}"></span>` : ''}${o.fijo ? icono('candado', 'fijo') : ''}</button></li>`
+              `<li><button class="item" data-id="${esc(o.id)}"${estado.sel.has(o.id) ? ' aria-current="true"' : ''}>${icono(o.tipo)}<span class="item-nombre">${esc(o.nombre)}</span>${o.estimado ? `<span class="marca-estimado" title="Medida estimada">≈</span>` : ''}${o.grupo ? icono('grupo', 'fijo') : ''}${o.fijo ? `<span class="marca-bloqueo" title="Bloqueado: no se mueve ni se borra">${icono('candado')}</span>` : ''}${capaDe(o) ? `<span class="punto-capa" style="background:${esc(capaDe(o).color)}" title="Capa ${esc(capaDe(o).nombre)}"></span>` : ''}${o.fijo ? icono('candado', 'fijo') : ''}</button></li>`
           )
           .join('')}</ul>
       </section>`;
@@ -2229,6 +2272,15 @@ function renderBiblioteca() {
   const coincide = (t) => !filtro || String(t || '').toLowerCase().includes(filtro);
   const equipos = catalogo.filter((c) => coincide(c.nombre) || coincide(c.ref) || coincide(TIPOS[c.tipo]?.nombre));
   const misBloques = bloques.filter((b) => coincide(b.nombre));
+  const armados = ARMADOS.filter((a) => coincide(a.nombre));
+  const htmlArmados = armados.length
+    ? `<section class="grupo-agregar"><h3>Armados listos</h3><div class="rejilla">${armados
+        .map(
+          (a) =>
+            `<button class="tarjeta-tipo" data-bloque="${esc(a.id)}" draggable="true" title="${esc(a.detalle)} Clic para agregar al centro, o arrastrá hasta la vista.">${icono(a.icono)}<span>${esc(a.nombre)}</span><small>${esc(a.medida)}</small></button>`
+        )
+        .join('')}</div></section>`
+    : '';
   const propios =
     (equipos.length
       ? `<section class="grupo-agregar"><h3>Mis equipos</h3><div class="rejilla">${equipos
@@ -2246,7 +2298,7 @@ function renderBiblioteca() {
           )
           .join('')}</div></section>`
       : '');
-  $('#catalogo').innerHTML = propios + html || `<p class="vacio-panel">No hay objetos que coincidan con “${esc(filtroBiblioteca)}”.</p>`;
+  $('#catalogo').innerHTML = propios + htmlArmados + html || `<p class="vacio-panel">No hay objetos que coincidan con “${esc(filtroBiblioteca)}”.</p>`;
 }
 
 function mostrarPestana(cual) {
@@ -2314,7 +2366,10 @@ function htmlPropiedades(o) {
       notasForma.push(`<div class="fila-botones"><button data-accion="a-poligono">${icono('poligono')} Editar su forma punto por punto</button></div>`);
     }
   } else if (o.tipo === 'acceso') notasForma.push(`<p class="dato" id="dato-forma">${datoForma(o)}</p>`);
-  if (o.tipo === 'zona') especificos.push(selectObj('uso', 'Uso', USOS_ZONA, o.uso || 'general'));
+  if (o.tipo === 'zona') {
+    especificos.push(selectObj('uso', 'Uso', USOS_ZONA, o.uso || 'general'));
+    especificos.push(campoObj('gente', 'Gente en la vista', Number(o.gente) || null, 'pers.', 0).replace('placeholder="varios"', 'placeholder="Nadie"'));
+  }
   if (o.tipo === 'estacionamiento') {
     const c = medidasCochera(o);
     especificos.push(selectObj('vehiculo', 'Para', Object.fromEntries(Object.entries(VEHICULOS).map(([k, v]) => [k, v.nombre])), o.vehiculo || 'auto'));
@@ -2361,7 +2416,7 @@ function htmlPropiedades(o) {
     especificos.push(campoObj('postes', 'Alto de los postes', (Number(o.alero) || 0) * h));
     especificos.push(`<label class="check"><input type="checkbox" data-campo="techo"${o.techo !== false ? ' checked' : ''}> Con techo</label>`);
   }
-  if (def.emite === true) especificos.push(campoObj('apertura', 'Apertura del haz', o.apertura || 11, '°', 0));
+  if (def.emite === true) especificos.push(campoObj('apertura', 'Apertura del haz', o.apertura || def.apertura || 11, '°', 0));
   if (o.tipo === 'columna') {
     especificos.push(`<label class="campo"><span>Forma</span><select data-campo="forma"><option value="">Cuadrada</option><option value="redonda"${o.forma === 'redonda' ? ' selected' : ''}>Redonda</option></select></label>`);
   }
@@ -2369,7 +2424,7 @@ function htmlPropiedades(o) {
     <div class="det-cabeza">
       <span class="det-icono">${icono(o.tipo)}</span>
       <input class="titulo-campo" data-campo="nombre" value="${esc(o.nombre)}" aria-label="Nombre del objeto">
-      <button class="mini${o.fijo ? ' activo' : ''}" data-accion="fijar" aria-pressed="${Boolean(o.fijo)}" title="${o.fijo ? 'Fijo: no se mueve ni se borra' : 'Fijar en su lugar'}">${icono(o.fijo ? 'candado' : 'abierto')}</button>
+      <button class="mini${o.fijo ? ' activo' : ''}" data-accion="fijar" aria-pressed="${Boolean(o.fijo)}" title="${o.fijo ? 'Bloqueado: no se mueve ni se borra. Clic (o B) para destrabarlo' : 'Bloquear en su lugar para que no se mueva sin querer (B)'}">${icono(o.fijo ? 'candado' : 'abierto')}</button>
     </div>
     <label class="campo"><span>Tipo</span><select data-campo="tipo">${
       TIPOS[o.tipo] ? '' : `<option value="${esc(o.tipo)}" selected>${esc(o.tipo)} (no está en la biblioteca)</option>`
@@ -2397,7 +2452,7 @@ function htmlPropiedades(o) {
         ${plano ? '' : campoObj('h', 'Alto', h)}
       </div>
       <p class="dato" id="dato-ocupa">${o.tipo === 'zona' || forma ? '' : `Ocupa ${fm(o.dims[0] * o.dims[1])} m² de piso.`}</p>
-      ${o.tipo === 'zona' ? `<p class="dato" id="dato-zona">${htmlDatoZona(o)}</p>` : ''}
+      ${o.tipo === 'zona' ? `<p class="dato" id="dato-zona">${htmlDatoZona(o)}</p>${htmlBotonesGente(o)}` : ''}
       ${notasForma.join('')}
       ${especificos.length ? `<div class="campos">${especificos.join('')}</div>` : ''}
       ${estado.escena.terreno?.puntos?.length >= 3 && !(o.elev > 0.05) ? `<p class="dato">${esc(textoDesnivel(o, estado.escena.terreno))}</p>` : ''}
@@ -2454,6 +2509,7 @@ function htmlMulti(objs) {
       <button data-accion="a-bloque" title="Para soltarlo entero en cualquier escena">${icono('mas')} Guardar como bloque</button>
       <button data-accion="vista-frente" title="Hoja con todas las alturas">${icono('escala')} Vista de frente</button>
       <button data-accion="vista-costado">${icono('escala')} De costado</button>
+      <button data-accion="fijar" title="Para que no se muevan sin querer (B)">${icono(objs.every((o) => o.fijo) ? 'abierto' : 'candado')} ${objs.every((o) => o.fijo) ? 'Desbloquear' : 'Bloquear'}</button>
     </div>
     <label class="campo"><span>Capa</span><select data-multi="capa">${opcionesSelect({ '': valorComun(objs, (o) => o.capa || '') === null ? 'Varias' : 'Sin capa', ...Object.fromEntries((estado.escena.capas || []).map((c) => [c.id, c.nombre])), __nueva: 'Nueva capa…' }, valorComun(objs, (o) => o.capa || '') || '')}</select></label>
     ${seccion(
@@ -2549,6 +2605,7 @@ function htmlProyecto() {
       ${campoNum('data-escena', 'proyecto.aforo', 'Gente esperada (aforo)', pr.aforo ?? null, 'pers.', 0).replace('placeholder="varios"', 'placeholder="Sin cargar"')}
       <label class="campo"><span>Notas</span><textarea data-escena="notas" rows="3" placeholder="Qué falta medir, contacto del lugar…">${esc(e.notas || '')}</textarea></label>`
     )}
+    ${seccion('Lo básico de la fiesta', htmlBasicos())}
     ${htmlFondo()}
     ${htmlUbicacion()}
     ${seccion(
@@ -2730,6 +2787,7 @@ const CAMPOS_NUMERO = {
   dispersion: [10, false, 'nada'],
   ganancia: [-60, false, 'nada'],
   limite: [20, false, 'nada'],
+  gente: [0, true, 'obj'],
 };
 
 function aplicarCampo(o, campo, el) {
@@ -2740,7 +2798,7 @@ function aplicarCampo(o, campo, el) {
       delete o[campo];
       return redibujo;
     }
-    const v = campo === 'costo' ? leerMonto(el.value) : n();
+    const v = campo === 'costo' ? leerMonto(el.value) : entero ? leerNumero(String(el.value).replace(/\.(?=\d{3}(\D|$))/g, '')) : n();
     if (v === null || v < minimo) return false;
     o[campo] = entero ? Math.round(v) : r3(v);
     return redibujo;
@@ -3874,6 +3932,117 @@ function htmlFondoCAD() {
     <div class="fila-botones"><button data-accion="cad-mover">${icono('mano')} Mover</button><button class="peligro" data-accion="cad-quitar">${icono('basura')} Quitar</button></div>`;
 }
 
+/* ------------------------------------------------------------------ bloquear */
+
+// Bloquea o destraba lo elegido (todo junto: si hay alguno suelto, bloquea todos).
+function alternarBloqueo() {
+  const objs = selObjs();
+  if (!objs.length) return aviso('Elegí lo que querés bloquear.', 'error');
+  const bloquear = !objs.every((o) => o.fijo);
+  antesDeCambiar();
+  for (const o of objs) {
+    if (bloquear) o.fijo = true;
+    else delete o.fijo;
+  }
+  marcarCambio({ lista: true, detalle: true });
+  const cual = objs.length === 1 ? objs[0].nombre : `${objs.length} objetos`;
+  aviso(bloquear ? `${cual}: bloqueado. No se mueve ni se borra sin querer (B lo destraba).` : `${cual}: desbloqueado.`);
+}
+
+/* ------------------------------------------------------------------ lo básico de la fiesta */
+
+// Lo que se define en cada fiesta: qué está ubicado en la escena y un botón para agregar lo que falta.
+// "plan" guarda lo que se decidió que no va (ambulancia, carpa).
+function htmlBasicos() {
+  const e = estado.escena;
+  const objs = e.objetos;
+  const de = (...tipos) => objs.filter((o) => tipos.includes(o.tipo));
+  const plan = e.plan || {};
+  const plural = (n, uno, varios) => `${fm(n, 0)} ${n === 1 ? uno : varios}`;
+  const boton = (accion, texto, titulo = '') => `<button class="mini-texto" data-basico="${esc(accion)}"${titulo ? ` title="${esc(titulo)}"` : ''}>${texto}</button>`;
+  const ver = (lista) => (lista.length ? boton(`ver:${lista.map((o) => o.id).join(',')}`, 'Ver') : '');
+  const siNo = (clave) =>
+    `<span class="si-no" role="group">${[
+      ['si', 'Va', true],
+      ['no', 'No va', false],
+    ]
+      .map(([v, t, b]) => `<button class="mini-texto${plan[clave] === b ? ' activo' : ''}" data-basico="plan:${clave}:${v}" aria-pressed="${plan[clave] === b}">${t}</button>`)
+      .join('')}</span>`;
+  const fila = (icon, titulo, texto, ok, botones) =>
+    `<div class="basico${ok === true ? ' ok' : ok === false ? ' falta' : ''}"><span class="basico-icono">${icono(ok === true ? 'check' : icon)}</span><div class="basico-texto"><strong>${titulo}</strong><span>${texto}</span></div><div class="basico-botones">${botones}</div></div>`;
+  const filas = [];
+
+  const banos = de('bano_quimico');
+  filas.push(fila('bano_quimico', 'Baños químicos', banos.length ? plural(banos.length, 'ubicado', 'ubicados') : 'Sin ubicar (suelen ir 5 o 6)', banos.length > 0, ver(banos) + boton('armado:armado-banos-6', 'Agregar 6 en fila')));
+
+  const luces = objs.filter((o) => LUCES.has(o.tipo));
+  const cuantas = (t, uno, varios) => {
+    const n = luces.filter((o) => o.tipo === t).length;
+    return n ? plural(n, uno, varios) : '';
+  };
+  const detalleLuces = [cuantas('beam', 'beam', 'beams'), cuantas('estrobo', 'estrobo', 'estrobos'), cuantas('barra_led', 'barra LED', 'barras LED'), cuantas('luz', 'cabezal', 'cabezales'), cuantas('par', 'tacho', 'tachos')].filter(Boolean).join(', ');
+  filas.push(fila('beam', 'Luces', detalleLuces || 'Sin luces', luces.length > 0, ver(luces) + boton('armado:armado-truss-luces', 'Truss con luces') + boton('armado:armado-barras-led', 'Barras LED')));
+
+  const barras = de('barra');
+  const gazebos = de('gazebo');
+  filas.push(fila('gazebo', 'Barra', barras.length ? `${plural(barras.length, 'barra', 'barras')}${gazebos.length ? `, ${plural(gazebos.length, 'gazebo', 'gazebos')}` : ''}` : 'Sin ubicar', barras.length > 0, ver([...barras, ...gazebos]) + boton('armado:armado-barra-gazebos', 'Barra con 2 gazebos')));
+
+  const carpas = de('carpa');
+  const textoCarpa = plan.carpa === false ? 'No va' : carpas.length ? carpas.map((o) => `${fm(o.dims[0], 0)} × ${fm(o.dims[1], 0)} m, ${fm(o.dims[2], 1)} m de alto`).join('; ') : plan.carpa === true ? 'Va: falta ubicarla' : '¿Va carpa?';
+  const okCarpa = plan.carpa === false || carpas.length > 0 ? true : plan.carpa === true ? false : null;
+  filas.push(fila('carpa', 'Carpa', textoCarpa, okCarpa, siNo('carpa') + (plan.carpa === false ? '' : ver(carpas) + (carpas.length ? '' : boton('agregar:carpa', 'Ubicar', 'Carpa de 12 × 15 m y 4 m de alto; las medidas se cambian en el panel')))));
+
+  const ambulancias = de('ambulancia');
+  const textoAmb = plan.ambulancia === false ? 'No va' : ambulancias.length ? 'Ubicada' : plan.ambulancia === true ? 'Va: falta ubicarla' : '¿Va ambulancia?';
+  const okAmb = plan.ambulancia === false || ambulancias.length > 0 ? true : plan.ambulancia === true ? false : null;
+  filas.push(fila('ambulancia', 'Ambulancia', textoAmb, okAmb, siNo('ambulancia') + (plan.ambulancia === false ? '' : ver(ambulancias) + (ambulancias.length ? '' : boton('agregar:ambulancia', 'Ubicar', 'Conviene cerca de una salida, con el camino libre hasta la calle')))));
+
+  const generadores = de('generador');
+  filas.push(fila('generador', 'Generador', generadores.length ? plural(generadores.length, 'ubicado', 'ubicados') : 'Sin ubicar', generadores.length > 0, ver(generadores) + boton('agregar:generador', generadores.length ? 'Otro' : 'Ubicar')));
+
+  const vallas = de('vallado');
+  const metros = vallas.reduce((s, o) => s + largoDe(o), 0);
+  filas.push(fila('vallado', 'Límite del predio', vallas.length ? `${fm(metros, 0)} m de vallado` : 'Sin marcar', vallas.length > 0, ver(vallas) + boton('agregar:vallado', 'Marcar vallado', 'Aparece una línea: arrastrá sus puntos y sumá los que hagan falta con los puntos azules del medio')));
+
+  const puestos = objs.filter((o) => o.tipo === 'puesto' && (o.rol || 'seguridad') === 'seguridad');
+  const gente = puestos.reduce((s, o) => s + (Number(o.personas) || 1), 0);
+  let recomendado = null;
+  try {
+    recomendado = resumenStaff(e).seguridad.recomendado;
+  } catch {}
+  const textoSeg = `${puestos.length ? `${plural(gente, 'persona', 'personas')} en ${plural(puestos.length, 'puesto', 'puestos')}` : 'Sin puestos'}${recomendado ? ` (se recomiendan ${fm(recomendado, 0)})` : ''}`;
+  filas.push(fila('puesto', 'Seguridad', textoSeg, puestos.length > 0 && (!recomendado || gente >= recomendado), ver(puestos) + boton('agregar:puesto', 'Agregar puesto')));
+
+  const accesos = de('acceso');
+  const caminos = objs.filter((o) => o.tipo === 'camino' && (o.uso || 'publico') === 'publico');
+  const textoEntrada = `${accesos.length ? plural(accesos.length, 'acceso', 'accesos') : 'Sin acceso marcado'}, ${caminos.length ? `camino de ${fm(caminos.reduce((s, o) => s + largoDe(o), 0), 0)} m` : 'sin camino'}`;
+  filas.push(fila('acceso', 'Entrada de la gente', textoEntrada, accesos.length > 0 && caminos.length > 0, ver([...accesos, ...caminos]) + boton('armado:armado-entrada', 'Agregar entrada') + boton('trazar:camino', 'Dibujar el camino')));
+
+  return `<div class="basicos">${filas.join('')}</div><p class="ayuda">Lo que se agrega aparece en el centro de la vista: arrastralo a su lugar. Los armados quedan agrupados.</p>`;
+}
+
+function accionBasico(accion) {
+  const [cmd, ...resto] = accion.split(':');
+  const valor = resto.join(':');
+  if (cmd === 'ver') {
+    ponerSeleccion(valor.split(',').filter((id) => objPorId(id)));
+    return centrarEn(selObjs());
+  }
+  if (cmd === 'agregar') return agregar(valor);
+  if (cmd === 'armado') return insertarBloque(valor);
+  if (cmd === 'trazar') {
+    if (!enVista3D()) ponerVista('planta');
+    ponerHerramienta('camino');
+    return aviso('Hacé clic punto por punto desde donde llega la gente hasta la entrada. Doble clic termina.');
+  }
+  if (cmd === 'plan') {
+    const [clave, v] = resto;
+    antesDeCambiar();
+    estado.escena.plan = { ...(estado.escena.plan || {}), [clave]: v === 'si' };
+    marcarCambio({ detalle: true });
+  }
+}
+
 /* ------------------------------------------------------------------ checklist en el celular */
 
 async function cargarEstadoChecklist() {
@@ -4248,8 +4417,9 @@ function guardarComoBloque(nombre) {
 }
 
 function insertarBloque(id, punto = null) {
-  const bl = bloques.find((x) => x.id === id);
+  const bl = bloques.find((x) => x.id === id) || ARMADOS.find((x) => x.id === id);
   if (!bl || !estado.escena) return;
+  if (!enVista3D()) ponerVista('3d');
   const [x, y] = punto || centroDeVista();
   const grupo = nuevoId();
   const usados = new Set(estado.escena.objetos.map((o) => o.nombre));
@@ -5414,6 +5584,8 @@ function conectarInterfaz() {
     t.dispatchEvent(new Event('input', { bubbles: true }));
   });
   der.addEventListener('click', (e) => {
+    const basico = e.target.closest('[data-basico]');
+    if (basico) return accionBasico(basico.dataset.basico);
     const borrarVista = e.target.closest('[data-vista-borrar]');
     if (borrarVista) {
       antesDeCambiar();
@@ -5535,6 +5707,19 @@ function conectarInterfaz() {
       });
     } else if (a === 'vista-frente') agregarVistaFrente('frente');
     else if (a === 'vista-costado') agregarVistaFrente('costado');
+    else if (a.startsWith('gente:')) {
+      const o = selUnico();
+      if (!o || o.tipo !== 'zona') return;
+      const cual = a.slice(6);
+      const n = cual === 'comoda' ? gentePara(o).comoda : cual === 'llena' ? gentePara(o).llena : 0;
+      antesDeCambiar();
+      if (n > 0) o.gente = n;
+      else delete o.gente;
+      reconstruirObjeto(o);
+      actualizarSeleccion3D();
+      marcarCambio({ detalle: true });
+      if (n > 4 * superficieDe(o)) aviso('Se muestran como mucho 4 personas por m².');
+    }
     else if (a === 'vista-cabina') {
       const v = vistaPorDefecto(estado.escena);
       if (!v) return;
@@ -5548,14 +5733,7 @@ function conectarInterfaz() {
     else if (a === 'repetir') dialogoRepetir();
     else if (a === 'eliminar') eliminarSeleccion();
     else if (a === 'centrar') centrarEn(selObjs());
-    else if (a === 'fijar') {
-      const o = selUnico();
-      if (!o) return;
-      antesDeCambiar();
-      if (o.fijo) delete o.fijo;
-      else o.fijo = true;
-      marcarCambio({ lista: true, detalle: true });
-    }
+    else if (a === 'fijar') alternarBloqueo();
   });
 
   // Fotos
@@ -5645,6 +5823,7 @@ function conectarInterfaz() {
       c: () => ponerHerramienta('cota'),
       z: () => ponerHerramienta('zona'),
       l: () => ponerHerramienta('camino'),
+      b: alternarBloqueo,
       n: () => ponerNoche(!estado.noche),
       f: () => (estado.sel.size ? centrarEn(selObjs()) : encuadrar()),
       1: () => ponerVista('3d'),

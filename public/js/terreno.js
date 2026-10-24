@@ -647,6 +647,7 @@ const ARTICULO = {
   cabina_dj: 'la cabina',
   casita: 'la estructura',
   carpa: 'la carpa',
+  gazebo: 'el gazebo',
   generador: 'el generador',
   bano_quimico: 'el baño',
   foodtruck: 'el food truck',

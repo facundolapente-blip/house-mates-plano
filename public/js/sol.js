@@ -367,7 +367,7 @@ export function sombraDe(o, direccion) {
       [0, -p / 2, h],
       [0, p / 2, h],
     ]);
-  } else if (o.tipo === 'carpa' || o.tipo === 'primeros_auxilios') {
+  } else if (o.tipo === 'carpa' || o.tipo === 'gazebo' || o.tipo === 'primeros_auxilios') {
     agregar(rect(h * 0.72));
     agregar([[0, 0, h]]);
   } else if (o.tipo === 'cilindro' || (o.tipo === 'columna' && o.forma === 'redonda')) {

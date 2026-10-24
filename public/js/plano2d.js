@@ -248,7 +248,11 @@ export function simbolo(o, M, k, op) {
       return poli(esq, o.salida === false ? '#fff' : '#e3f3ea', color, 0.35) + (w * k > 8 ? texto(c[0], c[1], o.salida === false ? 'ACCESO' : 'SALIDA', { t: Math.min(2.2, p * k * 0.8 + 1.2), peso: 700, color, ancla: 'middle', base: 'middle' }) : '');
     }
     case 'carpa':
-      return poli(esq, '#fafafa', TINTA, 0.25, ' stroke-dasharray="1.5 0.8"') + linea(esq[0], esq[2], { w: 0.12 }) + linea(esq[1], esq[3], { w: 0.12 });
+    case 'gazebo': {
+      // Carpa grande: la cumbrera a lo largo. Gazebo: las dos diagonales del techo a cuatro aguas.
+      const techo = Math.max(w, p) > 6 ? (p >= w ? linea(L(0, -p / 2), L(0, p / 2), { w: 0.15 }) : linea(L(-w / 2, 0), L(w / 2, 0), { w: 0.15 })) : linea(esq[0], esq[2], { w: 0.12 }) + linea(esq[1], esq[3], { w: 0.12 });
+      return poli(esq, 'none', TINTA, 0.25, ' stroke-dasharray="1.5 0.8"') + techo;
+    }
     case 'auto':
     case 'camion':
     case 'ambulancia':
@@ -336,6 +340,15 @@ export function simbolo(o, M, k, op) {
       const r = (Math.max(w, p) / 2) * k;
       return circ(c, r, '#fff', TINTA, 0.22, dash) + linea(c, L(0, Math.max(w, p) * 0.9), { w: 0.2 });
     }
+    case 'beam': {
+      // Como un cabezal, con el centro lleno y el haz largo y finito.
+      const r = (Math.max(w, p) / 2) * k;
+      return circ(c, r, '#fff', TINTA, 0.22, dash) + circ(c, r * 0.38, TINTA, TINTA, 0.1) + linea(c, L(0, Math.max(w, p) * 1.6), { w: 0.12 });
+    }
+    case 'estrobo':
+      return poli(esq, '#fff6cf') + linea(L(-w * 0.3, 0), L(w * 0.3, 0), { w: 0.12 }) + frente();
+    case 'barra_led':
+      return poli(esq, '#ece3ff', '#5b2fc4', 0.22);
     case 'poste_v':
     case 'farol': {
       const r = Math.max(0.9, (Math.max(w, p) / 2) * k);

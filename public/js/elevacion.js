@@ -330,9 +330,27 @@ function totem(d, [w, p, h], c) {
 }
 
 function carpa(d, [w, p, h], c) {
+  const esquinas = (z) => [[-w / 2, -p / 2, z], [w / 2, -p / 2, z], [w / 2, p / 2, z], [-w / 2, p / 2, z]];
+  // Carpa grande: parantes cada 5 m en los lados largos y techo a dos aguas (como en el 3D).
+  if (Math.max(w, p) > 6) {
+    const enY = p >= w;
+    const L = enY ? p : w;
+    const pared = Math.max(Math.min(h * 0.7, h - 0.6), h * 0.4);
+    const n = Math.max(1, Math.round(L / 5));
+    for (let i = 0; i <= n; i++) {
+      const u = -L / 2 + 0.05 + ((L - 0.1) / n) * i;
+      for (const s of [-1, 1]) {
+        const lado = s * ((enY ? w : p) / 2 - 0.05);
+        d.cil(enY ? lado : u, enY ? u : lado, 0.05, 0.05, 0, pared, '#9aa1a8', 'metal');
+      }
+    }
+    const cumbrera = enY ? [[0, -p / 2, h], [0, p / 2, h]] : [[-w / 2, 0, h], [w / 2, 0, h]];
+    d.solido([...esquinas(pared), ...cumbrera], c, 'techo');
+    return;
+  }
   const pared = h * 0.72;
   for (const sx of [-1, 1]) for (const sy of [-1, 1]) d.cil(sx * (w / 2 - 0.04), sy * (p / 2 - 0.04), 0.035, 0.035, 0, pared, '#9aa1a8', 'metal');
-  d.solido([[-w / 2, -p / 2, pared], [w / 2, -p / 2, pared], [w / 2, p / 2, pared], [-w / 2, p / 2, pared], [0, 0, h]], c, 'techo');
+  d.solido([...esquinas(pared), [0, 0, h]], c, 'techo');
 }
 
 function persona(d, [w, p, h], c) {
@@ -621,6 +639,17 @@ const DIBUJO = {
     }
   },
 };
+DIBUJO.gazebo = carpa;
+DIBUJO.beam = DIBUJO.luz;
+// Estrobo: la caja sobre su horquilla.
+DIBUJO.estrobo = (d, [w, p, h], c) => {
+  d.caja(-w / 2, w / 2, -p / 2, p / 2, h * 0.18, h, c);
+  for (const s of [-1, 1]) d.caja(s * (w / 2 + 0.013) - 0.011, s * (w / 2 + 0.013) + 0.011, -0.025, 0.025, 0, h * 0.6, '#3a3d42', 'estructura', 0.7);
+};
+DIBUJO.barra_led = (d, [w, p, h], c) => d.caja(-w / 2, w / 2, -p / 2, p / 2, 0, h, c);
+
+// Luces que cuelgan de un truss (para las alturas y la fila de dónde cuelga cada una).
+const LUCES_COLGADAS = new Set(['luz', 'par', 'beam', 'estrobo', 'barra_led']);
 
 /* ------------------------------------------------------------------ niveles de cada objeto */
 
@@ -638,11 +667,11 @@ function nivelesDe(o, [w, p, h], e) {
     if (e > 0.05) agregar(e, 'base', 1);
   } else if (o.tipo === 'truss' && !(h > Math.max(w, p))) {
     agregar(e, 'abajo', 2);
-  } else if ((o.tipo === 'luz' || o.tipo === 'par') && e >= 1.8) {
+  } else if (LUCES_COLGADAS.has(o.tipo) && e >= 1.8) {
     // Colgada: importa la parte de abajo (altura libre); arriba es donde se cuelga (el truss ya lo dice).
     lista[0].prioridad = 1;
     agregar(e, 'abajo', 2);
-  } else if ((o.tipo === 'luz' || o.tipo === 'par' || o.tipo === 'pantalla') && e > 0.05) {
+  } else if ((LUCES_COLGADAS.has(o.tipo) || o.tipo === 'pantalla') && e > 0.05) {
     agregar(e, 'abajo', 2);
   } else if (e > 0.05 && o.tipo !== 'arbol') {
     agregar(e, 'base', 1);
@@ -880,7 +909,7 @@ function planCotas(proy) {
   }
   // Fila de arriba: dónde cuelga cada luz a lo largo del truss.
   let filaSup = null;
-  const colgadas = cuerpos.filter((o) => (o.tipo === 'luz' || o.tipo === 'par') && o.base >= 1.8);
+  const colgadas = cuerpos.filter((o) => LUCES_COLGADAS.has(o.tipo) && o.base >= 1.8);
   if (colgadas.length >= 2) {
     const centros = colgadas.map((o) => (o.u0 + o.u1) / 2);
     const tope = Math.max(...colgadas.map((o) => o.arriba));
@@ -1392,7 +1421,7 @@ export function vistaPorDefecto(escena) {
     const dy = y - num(o.pos[1]);
     return Math.abs(dx * Math.cos(t) + dy * Math.sin(t)) <= w / 2 + 1e-6 && Math.abs(-dx * Math.sin(t) + dy * Math.cos(t)) <= p / 2 + 1e-6;
   };
-  const SONIDO_LUCES = new Set(['parlante', 'sub', 'luz', 'par', 'truss', 'pantalla', 'tela', 'cabina_dj', 'escalera']);
+  const SONIDO_LUCES = new Set(['parlante', 'sub', 'luz', 'par', 'beam', 'estrobo', 'barra_led', 'truss', 'pantalla', 'tela', 'cabina_dj', 'escalera']);
   let semilla = objs.find((o) => o.tipo === 'cabina_dj' && objs.some((x) => (x.tipo === 'casita' || x.tipo === 'tarima') && dentro(x, o.pos)));
   semilla ||= objs.find((o) => o.tipo === 'cabina_dj');
   if (!semilla) {

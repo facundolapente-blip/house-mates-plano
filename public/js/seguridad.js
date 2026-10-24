@@ -318,7 +318,7 @@ function relevarSalidas(escena) {
 // salvo los vallados, que son una línea finita y no el rectángulo que los contiene.
 function obstaculosCapacidad(escena) {
   return objetosDe(escena)
-    .filter((o) => !defDatos(o).piso && o.tipo !== 'persona' && o.tipo !== 'vallado' && elevDe(o) < 1 && altoDe(o) > 0.05)
+    .filter((o) => !defDatos(o).piso && !defDatos(o).abierta && o.tipo !== 'persona' && o.tipo !== 'vallado' && elevDe(o) < 1 && altoDe(o) > 0.05)
     .map((o) => (o.tipo === 'arbol' ? { ...o, dims: [troncoDe(o), troncoDe(o), altoDe(o)] } : o));
 }
 
@@ -582,7 +582,7 @@ export function mapaDistancias(escena, { paso = 0.5, maxCeldas = 250000 } = {}) 
   // 5. Objetos apoyados en el piso (de los árboles, solo el tronco). Lo muy finito ocupa al menos una celda.
   for (const o of objetos) {
     const def = defDatos(o);
-    if (def.piso || ['persona', 'acceso', 'control_acceso', 'vallado'].includes(o.tipo)) continue;
+    if (def.piso || def.abierta || ['persona', 'acceso', 'control_acceso', 'vallado'].includes(o.tipo)) continue;
     if (elevDe(o) >= 1.2 || altoDe(o) <= 0.3) continue;
     if (esPoligono(o)) {
       const c = cajaDe(puntosMundo(o));
@@ -1085,7 +1085,7 @@ export const CSS_SEGURIDAD = `
 // Qué se dibuja en el plano de emergencia: estructura, salidas y servicios de emergencia, y de referencia
 // los baños, las barras y la cabina. Sin luces, decoración, muebles ni sonido.
 const EN_EMERGENCIA = new Set([
-  'columna', 'escalera', 'tarima', 'casita', 'carpa', 'cabina_dj', 'barra', 'foodtruck', 'bano_quimico', 'matafuego',
+  'columna', 'escalera', 'tarima', 'casita', 'carpa', 'gazebo', 'cabina_dj', 'barra', 'foodtruck', 'bano_quimico', 'matafuego',
   'primeros_auxilios', 'punto_encuentro', 'ambulancia', 'acceso', 'control_acceso', 'vallado', 'generador', 'tablero',
   'zona', 'senal', 'hilera', 'texto',
 ]);

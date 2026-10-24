@@ -14,7 +14,7 @@ import { defDatos } from './tipos-datos.js';
 import { aLocal, enRect } from './geometria.js';
 import { fm, esc, numero } from './formato.js';
 
-export const COLGABLES = new Set(['luz', 'par', 'pantalla', 'parlante', 'sub', 'truss', 'tela']);
+export const COLGABLES = new Set(['luz', 'par', 'beam', 'estrobo', 'barra_led', 'pantalla', 'parlante', 'sub', 'truss', 'tela']);
 export const PESO_TRUSS_METRO = 6; // kg/m si el tipo no dice otra cosa
 export const BANDA = 0.8; // m debajo del truss donde se busca lo que cuelga
 export const MARGEN_PLANTA = 0.4; // m de margen alrededor del truss en planta
@@ -146,7 +146,7 @@ export function analizarCargas(escena) {
     if (mejor) {
       colgadoDe.set(id, String(mejor.id));
       deducido.add(id);
-    } else if (it.tipo === 'luz' && elevDe(it) >= 1.5) {
+    } else if ((it.tipo === 'luz' || it.tipo === 'beam' || it.tipo === 'estrobo') && elevDe(it) >= 1.5) {
       avisar('aviso', `${nombreDe(it)} está a ${fm(elevDe(it))} m y no encontré de qué truss cuelga. Si va en otra estructura, elegila en "Colgado de".`, [id]);
     }
   }

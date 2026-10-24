@@ -6,7 +6,9 @@
 // lugar). emite: true proyecta un haz en modo noche; 'punto' ilumina alrededor (alturaLuz: fracción del alto).
 // forma: 'poligono' se dibuja punto por punto (zona libre, estacionamiento); 'linea', con una línea de puntos
 // (camino, vallado). potencia (W) y peso (kg) son valores típicos para el eléctrico y las cargas.
-// publico: aparece en el mapa para el público.
+// publico: aparece en el mapa para el público. apertura: grados del haz por defecto. destello: titila en modo
+// noche (estrobo). haciaArriba: el haz sale para arriba (barra LED). abierta: estructura con techo por la que se
+// pasa por debajo (carpa, gazebo): no cuenta como obstáculo para la capacidad ni para caminar a una salida.
 
 export const CATEGORIAS = [
   ['estructura', 'Estructura'],
@@ -29,13 +31,19 @@ export const TIPOS_DATOS = {
   columna: { nombre: 'Columna', cat: 'estructura', dims: [0.4, 0.4, 3], color: '#e6e4df' },
   tarima: { nombre: 'Tarima', cat: 'estructura', dims: [4, 2.4, 0.6], color: '#3b3d43', peso: 0 },
   casita: { nombre: 'Estructura a dos aguas', cat: 'estructura', dims: [5, 4, 4.5], color: '#1d1e21', publico: true },
-  carpa: { nombre: 'Carpa o gazebo', cat: 'estructura', dims: [3, 3, 2.6], color: '#ececec' },
+  carpa: { nombre: 'Carpa', cat: 'estructura', dims: [12, 15, 4], color: '#f4f4f2', abierta: true },
+  gazebo: { nombre: 'Gazebo', cat: 'estructura', dims: [3, 3, 2.6], color: '#ececec', abierta: true },
   escalera: { nombre: 'Escalera', cat: 'estructura', dims: [1.2, 3, 1.5], color: '#d7d4cd' },
   cabina_dj: { nombre: 'Cabina DJ', cat: 'sonido', dims: [1.8, 0.8, 1.05], color: '#2a2c31', potencia: 800, publico: true },
   parlante: { nombre: 'Parlante', cat: 'sonido', dims: [0.55, 0.5, 1], color: '#1e1f22', potencia: 1000, peso: 30, spl: 132, dispersion: 90 },
   sub: { nombre: 'Subwoofer', cat: 'sonido', dims: [0.7, 0.8, 0.65], color: '#1e1f22', potencia: 1500, peso: 55, spl: 135, dispersion: 360 },
   luz: { nombre: 'Cabezal móvil', cat: 'luces', dims: [0.35, 0.35, 0.45], color: '#232529', elev: 3.5, luz: '#ff3ea5', emite: true, potencia: 300, peso: 18 },
   par: { nombre: 'Tacho PAR', cat: 'luces', dims: [0.25, 0.25, 0.3], color: '#232529', elev: 3, luz: '#36c6ff', emite: true, potencia: 120, peso: 3 },
+  // Medidas y consumos típicos: beam 230 7R (BeamZ Tiger 7RC, Light4Me 7R), estrobo Clay Paky Stormy (850 VA,
+  // 7,2 kg) y barra LED de 1 m (18 × 3 W).
+  beam: { nombre: 'Cabezal beam', cat: 'luces', dims: [0.3, 0.25, 0.45], color: '#1f2124', elev: 3, luz: '#eef3ff', emite: true, apertura: 2.5, potencia: 250, peso: 12 },
+  estrobo: { nombre: 'Estrobo LED (tipo Stormy)', cat: 'luces', dims: [0.46, 0.16, 0.3], color: '#1f2124', elev: 3, luz: '#ffffff', emite: true, apertura: 42, destello: true, potencia: 850, peso: 7.2 },
+  barra_led: { nombre: 'Barra LED', cat: 'luces', dims: [1, 0.09, 0.1], color: '#1f2124', luz: '#8a4fff', emite: true, apertura: 25, haciaArriba: true, potencia: 70, peso: 2.5 },
   truss: { nombre: 'Truss', cat: 'luces', dims: [4, 0.3, 0.3], color: '#b9bec4', elev: 3.4, peso: 6 },
   pantalla: { nombre: 'Pantalla o neón', cat: 'luces', dims: [2, 0.08, 1.2], color: '#141518', elev: 1.2, luz: '#4a6cf7', potencia: 400, peso: 25 },
   poste_v: { nombre: 'Poste de luz en V', cat: 'luces', dims: [0.9, 0.12, 1.8], color: '#8a5a35', luz: '#ff4a1c', emite: 'punto', alturaLuz: 0.5, potencia: 40 },
@@ -93,6 +101,70 @@ export function catDe(o) {
 }
 
 export const troncoDe = (o) => Number(o.tronco) || Math.min(0.5, (o.dims?.[0] || 1) * 0.12);
+
+// Luces (para contarlas, colgarlas de un truss y dibujar sus alturas).
+export const LUCES = new Set(['luz', 'par', 'beam', 'estrobo', 'barra_led']);
+
+// Armados listos para soltar desde la biblioteca: varios objetos con posiciones relativas al punto donde se
+// sueltan. Quedan agrupados (se mueven juntos) y se separan con Ctrl+Shift+G.
+const fila = (n, paso, crear) => Array.from({ length: n }, (_, i) => crear((i - (n - 1) / 2) * paso, i));
+export const ARMADOS = [
+  {
+    id: 'armado-barra-gazebos',
+    nombre: 'Barra bajo 2 gazebos',
+    icono: 'gazebo',
+    medida: '6 × 3 m',
+    detalle: 'Dos gazebos de 3 × 3 m uno al lado del otro, la barra adelante y dos heladeras atrás.',
+    objetos: [
+      { tipo: 'gazebo', nombre: 'Gazebo de la barra', pos: [-1.5, 0], rot: 0, dims: [3, 3, 2.6] },
+      { tipo: 'gazebo', nombre: 'Gazebo de la barra', pos: [1.5, 0], rot: 0, dims: [3, 3, 2.6] },
+      { tipo: 'barra', nombre: 'Barra', pos: [0, 1.05], rot: 0, dims: [5.6, 0.6, 1.1] },
+      { tipo: 'heladera', nombre: 'Heladera', pos: [-1.5, -1.05], rot: 0, dims: [0.7, 0.7, 1.85] },
+      { tipo: 'heladera', nombre: 'Heladera', pos: [1.5, -1.05], rot: 0, dims: [0.7, 0.7, 1.85] },
+    ],
+  },
+  {
+    id: 'armado-banos-6',
+    nombre: 'Fila de 6 baños químicos',
+    icono: 'bano_quimico',
+    medida: '7,4 × 1,2 m',
+    detalle: 'Seis baños químicos en fila, con la puerta hacia adelante.',
+    objetos: fila(6, 1.25, (x) => ({ tipo: 'bano_quimico', nombre: 'Baño químico', pos: [x, 0], rot: 0, dims: [1.15, 1.15, 2.3] })),
+  },
+  {
+    id: 'armado-entrada',
+    nombre: 'Entrada con seguridad',
+    icono: 'acceso',
+    medida: '11 × 3 m',
+    detalle: 'Portón de 6 m, el control de acceso detrás y un puesto de seguridad de 2 personas a cada lado.',
+    objetos: [
+      { tipo: 'acceso', nombre: 'Entrada del público', pos: [0, 0], rot: 0, dims: [6, 0.4, 3] },
+      { tipo: 'control_acceso', nombre: 'Control de acceso', pos: [0, -2.5], rot: 0, dims: [6, 0.8, 1.1] },
+      { tipo: 'puesto', nombre: 'Seguridad de la entrada', pos: [-4.2, -2.5], rot: 0, dims: [1, 1, 0], rol: 'seguridad', personas: 2 },
+      { tipo: 'puesto', nombre: 'Seguridad de la entrada', pos: [4.2, -2.5], rot: 0, dims: [1, 1, 0], rol: 'seguridad', personas: 2 },
+    ],
+  },
+  {
+    id: 'armado-truss-luces',
+    nombre: 'Truss con 4 beams y 2 estrobos',
+    icono: 'beam',
+    medida: '6 m a 3,4 m de alto',
+    detalle: 'Truss de 6 m a 3,4 m de alto con cuatro beams y dos estrobos colgados.',
+    objetos: [
+      { tipo: 'truss', nombre: 'Truss de luces', pos: [0, 0], rot: 0, dims: [6, 0.3, 0.3], elev: 3.4 },
+      ...fila(4, 1.5, (x) => ({ tipo: 'beam', nombre: 'Beam', pos: [x, 0], rot: 0, dims: [0.3, 0.25, 0.45], elev: 2.95 })),
+      ...fila(2, 1.5, (x) => ({ tipo: 'estrobo', nombre: 'Estrobo', pos: [x * 2, 0], rot: 0, dims: [0.46, 0.16, 0.3], elev: 3.1 })),
+    ],
+  },
+  {
+    id: 'armado-barras-led',
+    nombre: '4 barras LED en el piso',
+    icono: 'barra_led',
+    medida: '4 × 0,1 m',
+    detalle: 'Cuatro barras LED de 1 m en fila, bañando de luz para arriba (por ejemplo, el frente de la cabina).',
+    objetos: fila(4, 1.05, (x) => ({ tipo: 'barra_led', nombre: 'Barra LED', pos: [x, 0], rot: 0, dims: [1, 0.09, 0.1] })),
+  },
+];
 
 // Roles del staff (tipo "puesto").
 export const ROLES_STAFF = {

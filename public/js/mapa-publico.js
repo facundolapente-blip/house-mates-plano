@@ -394,6 +394,7 @@ function reunir(escena, ocultarExtra) {
       case 'casita':
       case 'tarima':
       case 'carpa':
+      case 'gazebo':
         estructuras.push(o);
         break;
       case 'zona': {
@@ -516,7 +517,7 @@ function reunir(escena, ocultarExtra) {
   for (const s of sueltas) {
     const caja = cajaDe(esquinas(s));
     const parlantes = sonido.filter((p) => separacion(caja, cajaDe(esquinas(p))) <= 5).length;
-    if (s.tipo !== 'carpa' && parlantes >= 2 && !reglas.categoria.has('escenario')) {
+    if (s.tipo !== 'carpa' && s.tipo !== 'gazebo' && parlantes >= 2 && !reglas.categoria.has('escenario')) {
       escenarios.push(nuevoPin('escenario', { pos: [...s.pos], ids: [s.id], tipos: [s.tipo], huellas: [esquinas(s)], agrupable: false, miembros: [s] }));
     } else if (s.mapa === true || (s.tipo === 'casita' && nombrePropio(s))) {
       if (!reglas.categoria.has('otro')) pines.push(pinDeObjeto(s, 'otro'));

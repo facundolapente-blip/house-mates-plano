@@ -101,7 +101,7 @@ function punto(p) {
 }
 
 // Campos numéricos opcionales: se convierten si vienen como texto y se borran si no se pueden leer.
-const OPCIONALES = ['elev', 'apertura', 'tronco', 'alero', 'tirante', 'ancho', 'calle', 'angulo', 'accesibles', 'modulo', 'potencia', 'peso', 'costo', 'capacidad', 'spl', 'dispersion', 'ganancia', 'limite', 'personas', 'tamano', 'fases', 'tension'];
+const OPCIONALES = ['elev', 'apertura', 'tronco', 'alero', 'tirante', 'ancho', 'calle', 'angulo', 'accesibles', 'modulo', 'potencia', 'peso', 'costo', 'capacidad', 'spl', 'dispersion', 'ganancia', 'limite', 'personas', 'tamano', 'fases', 'tension', 'gente'];
 
 // Colores: #rgb, #rrggbb (con o sin transparencia) o un nombre como "red". Lo demás se descarta, porque
 // el color va directo a los atributos del plano en SVG.

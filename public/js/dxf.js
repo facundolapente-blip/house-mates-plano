@@ -30,7 +30,7 @@ const COLOR_CAT = { estructura: 7, sonido: 5, luces: 6, energia: 2, barra: 30, m
 export const capaObjetos = (cat) => `HM-OBJETOS-${String(cat || 'otros').toUpperCase()}`;
 
 // Objetos que se dibujan como círculo (o elipse si no son parejos).
-const REDONDOS = new Set(['luz', 'par', 'poste_v', 'farol', 'matafuego', 'mesa_alta', 'banqueta', 'cilindro', 'planta', 'puesto', 'marcador', 'medicion']);
+const REDONDOS = new Set(['luz', 'par', 'beam', 'poste_v', 'farol', 'matafuego', 'mesa_alta', 'banqueta', 'cilindro', 'planta', 'puesto', 'marcador', 'medicion']);
 // Lo que va en capas propias o no se dibuja como objeto.
 const APARTE = new Set(['zona', 'estacionamiento', 'camino', 'vallado', 'persona', 'texto', 'etiqueta']);
 
@@ -317,7 +317,7 @@ export function exportarDXF(escena, { incluirArboles = true } = {}) {
       else d.polilinea(capa, elipse(o.pos, w / 2, p / 2, o.rot), true, 'DASHED');
       d.circulo(capa, o.pos, troncoDe(o) / 2);
     } else if (REDONDOS.has(o.tipo) || (o.tipo === 'columna' && o.forma === 'redonda')) {
-      const parejo = Math.abs(w - p) < 1e-6 || o.tipo === 'luz' || o.tipo === 'par';
+      const parejo = Math.abs(w - p) < 1e-6 || o.tipo === 'luz' || o.tipo === 'par' || o.tipo === 'beam';
       if (parejo) d.circulo(capa, o.pos, Math.max(w, p) / 2, tl);
       else d.polilinea(capa, elipse(o.pos, w / 2, p / 2, o.rot), true, tl);
     } else if (o.tipo === 'flecha') {

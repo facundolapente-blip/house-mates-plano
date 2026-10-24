@@ -35,7 +35,7 @@ const ICONO = 'http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png';
 const CON_CARPETA = new Set(['zona', 'estacionamiento', 'camino', 'vallado', 'arbol', 'persona']);
 // Objetos que no tienen sentido como superficie en el mapa (se dejan solo como punto).
 const SIN_HUELLA = new Set(['texto', 'flecha', 'etiqueta', 'senal', 'marcador', 'medicion']);
-const REDONDOS = new Set(['luz', 'par', 'poste_v', 'farol', 'matafuego', 'mesa_alta', 'banqueta', 'cilindro', 'planta', 'arbol', 'puesto']);
+const REDONDOS = new Set(['luz', 'par', 'beam', 'poste_v', 'farol', 'matafuego', 'mesa_alta', 'banqueta', 'cilindro', 'planta', 'arbol', 'puesto']);
 
 /* ------------------------------------------------------------------ ayudas */
 

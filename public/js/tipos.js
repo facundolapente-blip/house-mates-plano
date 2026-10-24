@@ -112,6 +112,43 @@ function cabezal(g, [w, p, h], c) {
   g.add(cabeza);
 }
 
+// Beam: cabezal móvil con una lente chica y muy brillante abajo (el haz es finito).
+function beam(g, [w, p, h], c, o, ctx) {
+  cabezal(g, [w, p, h], c);
+  const r = Math.min(w, p) * 0.34;
+  const lente = new THREE.Mesh(new THREE.CircleGeometry(r * 0.42, 20), mat('#ffffff', { emissive: o.luz || TIPOS.beam.luz, emissiveIntensity: ctx.noche ? 3 : 0.7 }));
+  lente.rotation.x = Math.PI / 2;
+  lente.position.y = h * 0.4 - r - 0.003;
+  lente.userData.sinBordes = true;
+  g.add(lente);
+}
+
+// Estrobo LED (tipo Clay Paky Stormy): caja chata con el panel de LED al frente, sobre una horquilla.
+function estrobo(g, [w, p, h], c, o, ctx) {
+  const base = h * 0.18;
+  bloque(g, mat(c), w, h - base, p, 0, base);
+  const panel = new THREE.Mesh(
+    new THREE.PlaneGeometry(w * 0.88, (h - base) * 0.8),
+    mat('#eef1ff', { emissive: o.luz || TIPOS.estrobo.luz, emissiveIntensity: ctx.noche ? 1.4 : 0.3, roughness: 0.3 })
+  );
+  panel.position.set(0, base + (h - base) / 2, p / 2 + 0.003);
+  panel.userData.sinBordes = true;
+  g.add(panel);
+  const metal = mat('#2b2d31');
+  for (const s of [-1, 1]) bloque(g, metal, 0.022, h * 0.6, 0.05, s * (w / 2 + 0.013), 0);
+  bloque(g, metal, w + 0.05, 0.022, 0.05, 0, 0);
+}
+
+// Barra LED: perfil largo y finito con los LED arriba (baña de luz una pared, un árbol o la estructura).
+function barraLed(g, [w, p, h], c, o, ctx) {
+  bloque(g, mat(c), w, h * 0.85, p);
+  const tira = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.96, p * 0.6), mat('#111111', { emissive: o.luz || TIPOS.barra_led.luz, emissiveIntensity: ctx.noche ? 3 : 0.8 }));
+  tira.rotation.x = -Math.PI / 2;
+  tira.position.y = h * 0.85 + 0.002;
+  tira.userData.sinBordes = true;
+  g.add(tira);
+}
+
 function par(g, [w, p, h], c) {
   tubo(g, mat(c, { roughness: 0.45 }), w / 2, h * 0.75, 0, h * 0.12, 0, 20).scale.z = p / Math.max(w, 0.001);
   bloque(g, mat(c), w * 0.9, 0.02, 0.03, 0, h * 0.95);
@@ -414,6 +451,91 @@ function zona(g, [w, p], c, o, ctx) {
   plano.renderOrder = 2;
   g.add(plano);
   lineaCerrada(g, contorno, 0.014, c);
+  const n = Math.round(Number(o.gente) || 0);
+  if (n > 0) genteEnZona(g, contorno, n, String(o.id));
+}
+
+// Gente simulada en una zona (o.gente): figuras simples repartidas parejo, para ver la escala real del lugar
+// lleno. Van en dos InstancedMesh (cuerpos y cabezas): mil personas cuestan dos dibujos. Siempre en los mismos
+// lugares para la misma zona (el azar sale del id).
+const geoCuerpoGente = new THREE.CapsuleGeometry(0.17, 1.1, 3, 8).translate(0, 0.72, 0);
+const geoCabezaGente = new THREE.SphereGeometry(0.105, 10, 8).translate(0, 1.6, 0);
+const ROPA = ['#26282e', '#3b3f48', '#1c1d21', '#4a3f3a', '#5a5f6a', '#6b4f5e', '#2f4a5c', '#d8d4cc', '#7a6a9a', '#3c5a8a'];
+const PIEL = ['#e3b896', '#c68b62', '#8d5a3b', '#f0cfb0', '#a86f4c'];
+const MAX_GENTE = 5000;
+
+function azar(texto) {
+  let s = 2166136261;
+  for (const ch of texto) s = Math.imul(s ^ ch.charCodeAt(0), 16777619);
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function dentroDeContorno(x, z, pts) {
+  let dentro = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, zi] = pts[i];
+    const [xj, zj] = pts[j];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) dentro = !dentro;
+  }
+  return dentro;
+}
+
+function genteEnZona(g, contorno, pedida, semilla) {
+  let area = 0;
+  for (let i = 0, j = contorno.length - 1; i < contorno.length; j = i++) area += (contorno[j][0] + contorno[i][0]) * (contorno[j][1] - contorno[i][1]);
+  area = Math.abs(area / 2);
+  if (area < 0.5) return;
+  // Más de 4 personas por m² no entran paradas.
+  const n = Math.min(pedida, Math.floor(area * 4), MAX_GENTE);
+  const xs = contorno.map((q) => q[0]);
+  const zs = contorno.map((q) => q[1]);
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+  const rnd = azar(semilla);
+  // Grilla pareja con un poco de desorden; si por los bordes no alcanzan los lugares, se achica.
+  let lugares = [];
+  for (let paso = Math.sqrt(area / n), intento = 0; intento < 6 && lugares.length < n; intento++, paso *= 0.9) {
+    lugares = [];
+    for (let z = z0 + paso / 2; z < z1; z += paso) {
+      for (let x = x0 + paso / 2; x < x1; x += paso) {
+        const px = x + (rnd() - 0.5) * paso * 0.7;
+        const pz = z + (rnd() - 0.5) * paso * 0.7;
+        if (dentroDeContorno(px, pz, contorno)) lugares.push([px, pz]);
+      }
+    }
+  }
+  for (let i = lugares.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [lugares[i], lugares[j]] = [lugares[j], lugares[i]];
+  }
+  lugares = lugares.slice(0, n);
+  if (!lugares.length) return;
+  const cuerpos = new THREE.InstancedMesh(geoCuerpoGente, mat('#ffffff', { roughness: 0.9 }), lugares.length);
+  const cabezas = new THREE.InstancedMesh(geoCabezaGente, mat('#ffffff', { roughness: 0.7 }), lugares.length);
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const eje = new THREE.Vector3(0, 1, 0);
+  const color = new THREE.Color();
+  lugares.forEach(([x, z], i) => {
+    const alto = 0.92 + rnd() * 0.16;
+    q.setFromAxisAngle(eje, rnd() * Math.PI * 2);
+    m.compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(1, alto, 1));
+    cuerpos.setMatrixAt(i, m);
+    cabezas.setMatrixAt(i, m);
+    cuerpos.setColorAt(i, color.set(ROPA[Math.floor(rnd() * ROPA.length)]));
+    cabezas.setColorAt(i, color.set(PIEL[Math.floor(rnd() * PIEL.length)]));
+  });
+  for (const malla of [cuerpos, cabezas]) {
+    malla.computeBoundingSphere();
+    malla.raycast = () => {};
+    malla.userData.sinBordes = true;
+    malla.userData.gente = true;
+    g.add(malla);
+  }
 }
 
 // Estacionamiento: el piso, las cocheras marcadas en blanco y las accesibles en azul.
@@ -543,8 +665,34 @@ function vehiculo(g, [w, p, h], c, o) {
   }
 }
 
-// Carpa o gazebo: cuatro parantes y techo a cuatro aguas.
+// Carpa grande de eventos (más de 6 m de lado): parantes cada 5 m en los lados largos y techo a dos aguas a lo
+// largo, con la cumbrera arriba de todo. Abierta a los costados.
+function carpaGrande(g, [w, p, h], c) {
+  const enZ = p >= w;
+  const L = enZ ? p : w;
+  const A = enZ ? w : p;
+  const pared = Math.max(Math.min(h * 0.7, h - 0.6), h * 0.4);
+  const metal = mat('#9aa1a8', { metalness: 0.5 });
+  const n = Math.max(1, Math.round(L / 5));
+  for (let i = 0; i <= n; i++) {
+    const u = -L / 2 + 0.05 + ((L - 0.1) / n) * i;
+    for (const s of [-1, 1]) {
+      const lado = s * (A / 2 - 0.05);
+      tubo(g, metal, 0.05, pared, enZ ? lado : u, 0, enZ ? u : lado, 8);
+    }
+  }
+  // Techo: el perfil del frente (triángulo sobre el alero) estirado a lo largo.
+  const perfil = new THREE.Shape([new THREE.Vector2(-A / 2, 0), new THREE.Vector2(A / 2, 0), new THREE.Vector2(0, h - pared)]);
+  const geo = new THREE.ExtrudeGeometry(perfil, { depth: L, bevelEnabled: false });
+  geo.translate(0, pared, -L / 2);
+  if (!enZ) geo.rotateY(Math.PI / 2);
+  const techo = new THREE.Mesh(geo, mat(c, { roughness: 0.9 }));
+  g.add(techo);
+}
+
+// Gazebo (o carpa chica): cuatro parantes y techo a cuatro aguas. Si es grande, carpa a dos aguas.
 function carpa(g, [w, p, h], c) {
+  if (Math.max(w, p) > 6) return carpaGrande(g, [w, p, h], c);
   const pared = h * 0.72;
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) tubo(g, mat('#9aa1a8', { metalness: 0.5 }), 0.035, pared, sx * (w / 2 - 0.04), 0, sz * (p / 2 - 0.04), 8);
   const techo = new THREE.Mesh(new THREE.ConeGeometry(Math.hypot(w, p) / 2, h - pared, 4, 1), mat(c, { roughness: 0.9 }));
@@ -690,8 +838,8 @@ function medicion(g, [w, , h], c) {
 
 // Cómo se dibuja cada tipo. Los datos (nombre, medidas típicas, categoría) están en tipos-datos.js.
 const CREAR = {
-  columna, tarima, casita, carpa, escalera,
-  cabina_dj: cabinaDJ, parlante, sub, luz: cabezal, par, truss, pantalla, poste_v: posteV, farol,
+  columna, tarima, casita, carpa, gazebo: carpa, escalera,
+  cabina_dj: cabinaDJ, parlante, sub, luz: cabezal, beam, estrobo, barra_led: barraLed, par, truss, pantalla, poste_v: posteV, farol,
   generador, tablero,
   barra, heladera, foodtruck: puestoAtencion,
   mesa, mesa_alta: mesaAlta, silla, banqueta, sillon,

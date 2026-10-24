@@ -61,6 +61,9 @@ const P = {
   sub: 'M4 5h16v14H4zM12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8z',
   luz: 'M8 3h8v3H8zM12 6v2M8 10a4 4 0 0 1 8 0v3H8zM9 17l-2 4M15 17l2 4M12 17v4',
   par: 'M8 4h8l1 10H7zM10 18h4M12 14v4',
+  beam: 'M8 3h8v3H8zM9 6v4M15 6v4M9.5 10h5v3h-5zM11.5 13L10 22M12.5 13L14 22',
+  estrobo: 'M3 5h18v11H3zM13 7l-3 4h4l-3 4M7 16v4M17 16v4M5 20h14',
+  barra_led: 'M2 13h20v3H2zM5 10l-1-2M9 10V7M12 10V6M15 10V7M19 10l1-2',
   truss: 'M3 8h18v8H3zM3 16l4-8 4 8 4-8 4 8 2-4',
   pantalla: 'M3 5h18v11H3zM9 20h6M12 16v4',
   poste_v: 'M5 4l7 16 7-16M9.5 12h5M12 9.5a1 1 0 1 1 0 .01',
@@ -85,6 +88,7 @@ const P = {
 
   // Predio, servicios y energía
   carpa: 'M3 11l9-7 9 7M5 9.5V20M19 9.5V20M3 20h18M12 4v16',
+  gazebo: 'M2 10l10-6 10 6M4 10v10M20 10v10M2 10h20M12 10v10',
   generador: 'M3 8h18v11H3zM6 19v2M18 19v2M13 10l-3 4h4l-3 4M16 11h2M16 14h2',
   tablero: 'M6 3h12v18H6zM13 6l-3 5h4l-3 5M9 19h6',
   foodtruck: 'M2 7h13v10H2zM15 10h4l3 3v4h-7M5.5 17a1.5 1.5 0 1 1 0 .01M18 17a1.5 1.5 0 1 1 0 .01M5 10h7',
