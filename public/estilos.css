@@ -1661,6 +1661,17 @@ a.boton:hover {
   color: var(--tinta-3);
 }
 
+.cap-total {
+  margin-bottom: 4px;
+  padding-bottom: 10px;
+  border-bottom-color: var(--linea-2);
+}
+
+.cap-total .cap-nombre {
+  color: var(--tinta);
+  font-weight: 600;
+}
+
 .resumen {
   display: grid;
   grid-template-columns: 1fr auto;

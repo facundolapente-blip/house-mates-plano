@@ -18,6 +18,7 @@ import { fm, esc, numero, slugificar } from './formato.js';
 import { esquinas, puntosMundo, esPoligono, superficieDe } from './geometria.js';
 import { lineaLocal, largoDe, modulosVallado, USOS_CAMINO } from './predio.js';
 import { hojaPlanta, opcionesHoja, texto, linea, pts, n2, recortar, envolver, anchoTexto, TINTA, GRIS, ACENTO } from './plano2d.js';
+import { capacidadDe } from './seguridad.js';
 
 export const PESTANAS = [
   ['cronograma', 'Cronograma'],
@@ -1014,17 +1015,20 @@ function picoDe(franjas) {
   return { personas: mejor, desde: franjas.some((f) => f.tu) ? desde : null };
 }
 
-// Aforo: proyecto.aforo, o estimado con las zonas para el público (densidad de "lleno" de la escena).
+// Aforo: el mismo número que usa Seguridad (capacidadDe): proyecto.aforo o, si falta, lo que entra con el lugar
+// lleno (superficie libre por la densidad de "lleno" de la escena).
 export function aforoDe(escena) {
   const n = numero(escena?.proyecto?.aforo);
   if (n !== null && n > 0) return { personas: Math.round(n), estimado: false, texto: '' };
-  const d = Array.isArray(escena?.densidad) ? numero(escena.densidad[1]) : null;
-  const dens = d !== null && d > 0 ? d : 3;
-  const NO_PUBLICO = new Set(['backstage', 'staff', 'descarga', 'estacionamiento']);
-  const zonas = objetosDe(escena).filter((o) => o.tipo === 'zona' && !NO_PUBLICO.has(o.uso) && !/backstage|staff|descarga|estacionamiento/.test(normalizar(o.nombre)));
-  if (!zonas.length) return { personas: null, estimado: true, texto: '' };
-  const m2 = zonas.reduce((s, z) => s + superficieDe(z), 0);
-  return { personas: Math.floor(m2 * dens), estimado: true, texto: `estimado con ${plural(zonas.length, 'zona')}: ${fm(m2, 0)} m² a ${fm(dens, 1)} personas por m²` };
+  let cap = null;
+  try {
+    cap = capacidadDe(escena);
+  } catch {
+    cap = null;
+  }
+  if (!cap || !(cap.llena > 0)) return { personas: null, estimado: true, texto: '' };
+  const d = cap.densidad[1];
+  return { personas: cap.llena, estimado: true, texto: `lugar lleno, como en Seguridad: ${fm(cap.libre, 0)} m² libres a ${fm(d, d % 1 ? 1 : 0)} personas por m²` };
 }
 
 // Staff por rol y por turno, máximo al mismo tiempo y seguridad recomendada para el aforo.
@@ -1104,7 +1108,10 @@ export function htmlStaff(escena) {
     const base = `Para ${fm(afo.personas, 0)} personas${afo.estimado ? ` (${afo.texto})` : ''} se recomienda 1 de seguridad cada ${fm(seg.porSeguridad, 0)}: ${plural(seg.recomendado, 'persona')} al mismo tiempo.`;
     const hay = seg.personas ? `Hay ${fm(seg.alMismoTiempo, 0)} al mismo tiempo${seg.personas !== seg.alMismoTiempo ? ` (${fm(seg.personas, 0)} en total entre turnos)` : ''}.` : 'No hay puestos de seguridad cargados.';
     const veredicto = ok ? 'Alcanza.' : `Faltan ${fm(seg.faltan, 0)}.`;
-    nota = `<div class="pr-nota ${ok ? 'pr-nota-ok' : 'pr-nota-atencion'}"><p><strong>${esc(veredicto)}</strong> ${esc(base)} ${esc(hay)}</p><p class="pr-tenue">Es una guía: manda lo que pida el municipio o la habilitación.</p>${ajustes}</div>`;
+    const guia = afo.estimado
+      ? 'Sin aforo cargado, la cuenta usa lo que entra con el lugar lleno. Cargá la gente que esperás para que sea real. Es una guía: manda lo que pida el municipio o la habilitación.'
+      : 'Es una guía: manda lo que pida el municipio o la habilitación.';
+    nota = `<div class="pr-nota ${ok ? 'pr-nota-ok' : 'pr-nota-atencion'}"><p><strong>${esc(veredicto)}</strong> ${esc(base)} ${esc(hay)}</p><p class="pr-tenue">${esc(guia)}</p>${ajustes}</div>`;
   }
   s += nota;
 

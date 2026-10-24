@@ -74,6 +74,13 @@ export function densidadDe(escena) {
   return [positivo(d?.[0], 2), positivo(d?.[1], 3)];
 }
 
+// Cuánta gente para todas las cuentas de la app: el aforo cargado o, si falta, lo que entra con el lugar lleno.
+// Seguridad, Staff y Comparar usan esta misma función para que nunca den números distintos.
+// { superficie, libre, comoda, llena, aforo, personas, densidad }
+export function capacidadDe(escena) {
+  return analizarSalidas(escena).capacidad;
+}
+
 // Gente esperada (escena.proyecto.aforo) o null si no está cargada.
 export function aforoDe(escena) {
   const n = leer(escena?.proyecto?.aforo);

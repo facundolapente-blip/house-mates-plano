@@ -20,7 +20,7 @@ import { mallaTerreno, curvasDeNivel, curvasSVG, htmlTerreno, textoDesnivel, alt
 import { exportarKML } from './kml.js';
 import { exportarDXF, leerDXF } from './dxf.js';
 import { crearVisorHTML, nombreArchivoVisor, materialesHTML } from './compartir.js';
-import { analizarSalidas, analizarServicios, htmlSeguridad, mapaDistancias, colorearDistancias, hojaEmergencia, opcionesSeguridad, opcionesServicios, CSS_SEGURIDAD } from './seguridad.js';
+import { analizarSalidas, analizarServicios, capacidadDe, htmlSeguridad, mapaDistancias, colorearDistancias, hojaEmergencia, opcionesSeguridad, opcionesServicios, CSS_SEGURIDAD } from './seguridad.js';
 import { hojasElevaciones, elevacionSVG, nuevaVista, vistaPorDefecto } from './elevacion.js';
 import { generarMapaPublico, FORMATOS as FORMATOS_MAPA, cargarFuentes, mapaAImagen } from './mapa-publico.js';
 import { htmlProduccion, aplicarEdicion, aplicarAccion, hojasProveedores, hojaLogistica, htmlResumenEstado, fechaHora as fechaHoraProd } from './produccion.js';
@@ -2112,8 +2112,26 @@ const densidad = () => {
 };
 const personas = (libre) => {
   const [a, b] = densidad();
-  return `${Math.floor(libre * a)} a ${Math.floor(libre * b)}`;
+  return `${fm(Math.floor(libre * a), 0)} a ${fm(Math.floor(libre * b), 0)}`;
 };
+
+// Total del lugar: es la misma cuenta que usan Seguridad y Staff (capacidadDe en seguridad.js).
+function htmlCapacidadTotal() {
+  let cap;
+  try {
+    cap = capacidadDe(estado.escena);
+  } catch {
+    return '';
+  }
+  if (!(cap.llena > 0)) return '';
+  const usa = cap.aforo !== null ? `Seguridad y Staff usan el aforo cargado: ${fm(cap.aforo, 0)} personas.` : `Sin aforo cargado, Seguridad y Staff usan el lugar lleno: ${fm(cap.llena, 0)} personas.`;
+  return `
+    <div class="cap-fila cap-total">
+      <div class="cap-nombre">Todo el lugar</div>
+      <div class="cap-personas">${fm(cap.comoda, 0)} a ${fm(cap.llena, 0)} <span>personas</span></div>
+      <div class="cap-sup">${fm(cap.libre, 0)} m² libres. ${usa}</div>
+    </div>`;
+}
 
 function htmlCapacidad() {
   const { areas, zonas } = estado.capacidad;
@@ -2124,7 +2142,7 @@ function htmlCapacidad() {
       <div class="cap-personas">${personas(x.libre)} <span>personas</span></div>
       <div class="cap-sup">${fm(x.total, 1)} m² en total, ${fm(x.libre, 1)} m² libres</div>
     </div>`;
-  return zonas.map(fila).join('') + areas.map(fila).join('');
+  return htmlCapacidadTotal() + zonas.map(fila).join('') + areas.map(fila).join('');
 }
 
 function htmlDatoZona(o) {
